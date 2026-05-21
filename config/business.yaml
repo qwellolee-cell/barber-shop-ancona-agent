@@ -1,0 +1,19 @@
+# Configuración del negocio — Generado por AgentKit
+negocio:
+  nombre: "Barber Shop Ancona"
+  descripcion: "Barbería tradicional en Ancona. Ofrecemos servicios de corte de hombre y arreglo de barba con técnicas clásicas y productos de calidad."
+  horario: "Martes a Sábado, 9:00-13:00 y 15:00-19:00. Domenica e Lunedì chiusi."
+  precios:
+    taglio_barba: "€25"
+
+agente:
+  nombre: "Simone"
+  tono: "vendedor y persuasivo"
+  casos_de_uso:
+    - "Responder preguntas frecuentes sobre servicios, precios y horarios"
+    - "Agendar citas y reservaciones"
+
+metadata:
+  creado: "2026-05-21"
+  version: "1.0"
+  proveedor_whatsapp: "greenapi"
