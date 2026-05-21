@@ -48,7 +48,7 @@ async def main():
         historial = await obtener_historial(TELEFONO_TEST)
 
         print("\nSimone: ", end="", flush=True)
-        respuesta = await generar_respuesta(mensaje, historial)
+        respuesta = await generar_respuesta(mensaje, historial, TELEFONO_TEST)
         print(respuesta)
         print()
 
