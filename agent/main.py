@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from agent.brain import generar_respuesta
 from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, get_appuntamenti_giorno
 from agent.providers import obtener_proveedor
+from agent.scheduler import crea_scheduler
 
 load_dotenv()
 
@@ -51,7 +52,12 @@ async def lifespan(app: FastAPI):
     logger.info("Base de datos inicializada")
     logger.info(f"Servidor AgentKit corriendo en puerto {PORT}")
     logger.info(f"Proveedor de WhatsApp: {proveedor.__class__.__name__}")
+    scheduler = crea_scheduler()
+    scheduler.start()
+    logger.info("Scheduler promemoria avviato (ogni ora)")
     yield
+    scheduler.shutdown()
+    logger.info("Scheduler promemoria fermato")
 
 
 app = FastAPI(
