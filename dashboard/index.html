@@ -113,6 +113,22 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; m
 .card-service { font-size: .85rem; color: #6B7280; margin-bottom: 4px; }
 .card-phone   { font-size: .8rem; color: #9CA3AF; }
 
+/* ── BOTTONE CANCELLA ───────────────────── */
+.card-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; margin-bottom: 4px;
+}
+.cancel-btn {
+  flex-shrink: 0; margin-left: 8px;
+  width: 24px; height: 24px;
+  background: #FEE2E2; color: #DC2626;
+  border: none; border-radius: 50%;
+  font-size: 1rem; font-weight: 700; line-height: 1;
+  cursor: pointer; transition: background .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.cancel-btn:hover { background: #FECACA; }
+
 /* ── FOOTER ─────────────────────────────── */
 .footer-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
@@ -312,10 +328,13 @@ function sectionHtml(title, apts) {
 
 function cardHtml(a) {
   const s = cardStyle(a.servizio);
-  return '<div class="apt-card" style="background:' + s.bg + ';border-left-color:' + s.border + '">' +
-    '<div class="card-top">' +
-      '<span class="card-time">' + a.ora + '</span>' +
-      '<span class="card-name">' + escHtml(a.nome_cliente) + '</span>' +
+  return '<div class="apt-card" data-id="' + a.id + '" style="background:' + s.bg + ';border-left-color:' + s.border + '">' +
+    '<div class="card-header">' +
+      '<div class="card-top">' +
+        '<span class="card-time">' + a.ora + '</span>' +
+        '<span class="card-name">' + escHtml(a.nome_cliente) + '</span>' +
+      '</div>' +
+      '<button class="cancel-btn" data-id="' + a.id + '" data-nome="' + escHtml(a.nome_cliente) + '" data-ora="' + a.ora + '" title="Cancella appuntamento">×</button>' +
     '</div>' +
     '<div class="card-service">' + escHtml(a.servizio) + ' · ' + a.durata_minuti + ' min</div>' +
     '<div class="card-phone">📱 ' + escHtml(a.telefono) + '</div>' +
@@ -351,6 +370,47 @@ function escHtml(str) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ── Cancellazione appuntamento ────────────────────────────
+async function cancelAppointment(id, nome, ora) {
+  if (!confirm('Cancellare l\'appuntamento di ' + nome + ' alle ' + ora + '?')) return;
+
+  const key = localStorage.getItem('adminKey');
+  try {
+    const res = await fetch('/admin/appuntamenti/' + id, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Key': key }
+    });
+    if (res.status === 401) { doLogout(); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const card = document.querySelector('.apt-card[data-id="' + id + '"]');
+    if (card) {
+      card.style.transition = 'opacity .3s ease';
+      card.style.opacity    = '0';
+      setTimeout(function() { card.remove(); updateCount(-1); }, 300);
+    }
+  } catch {
+    alert('Errore durante la cancellazione. Riprova.');
+  }
+}
+
+function updateCount(delta) {
+  const el     = document.getElementById('cal-count');
+  const strong = el.querySelector('strong');
+  if (!strong) return;
+  const n = parseInt(strong.textContent) + delta;
+  el.innerHTML = n <= 0
+    ? 'Nessun appuntamento'
+    : '<strong>' + n + '</strong> appuntament' + (n === 1 ? 'o' : 'i');
+}
+
+// Event delegation: un solo listener per tutti i bottoni × generati dinamicamente
+document.getElementById('cal-body').addEventListener('click', function(e) {
+  const btn = e.target.closest('.cancel-btn');
+  if (!btn) return;
+  cancelAppointment(parseInt(btn.dataset.id), btn.dataset.nome, btn.dataset.ora);
+});
 
 // ── Start ─────────────────────────────────────────────────
 init();
