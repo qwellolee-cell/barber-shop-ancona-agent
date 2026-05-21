@@ -189,6 +189,18 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) 
 
     system_prompt = cargar_system_prompt()
 
+    # Inietta data e ora correnti perché Claude possa risolvere
+    # riferimenti relativi come "domani", "dopodomani", "venerdì".
+    now = datetime.now()
+    GIORNI_IT = ["lunedì","martedì","mercoledì","giovedì","venerdì","sabato","domenica"]
+    MESI_IT   = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
+                 "luglio","agosto","settembre","ottobre","novembre","dicembre"]
+    data_contesto = (
+        f"Data e ora attuali: {GIORNI_IT[now.weekday()]} "
+        f"{now.day} {MESI_IT[now.month - 1]} {now.year}, ore {now.strftime('%H:%M')}."
+    )
+    system_prompt = data_contesto + "\n\n" + system_prompt
+
     mensajes = [{"role": m["role"], "content": m["content"]} for m in historial]
     mensajes.append({"role": "user", "content": mensaje})
 
