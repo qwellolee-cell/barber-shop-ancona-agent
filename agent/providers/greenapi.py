@@ -24,12 +24,17 @@ class ProveedorGreenAPI(ProveedorWhatsApp):
             return []
 
         message_data = body.get("messageData", {})
-        if message_data.get("typeMessage") != "textMessage":
+        tipo = message_data.get("typeMessage", "")
+
+        if tipo == "textMessage":
+            texto = message_data.get("textMessageData", {}).get("textMessage", "")
+        elif tipo == "extendedTextMessage":
+            texto = message_data.get("extendedTextMessageData", {}).get("text", "")
+        else:
             return []
 
         sender_data = body.get("senderData", {})
         telefono = sender_data.get("chatId", "").replace("@c.us", "")
-        texto = message_data.get("textMessageData", {}).get("textMessage", "")
         mensaje_id = body.get("idMessage", "")
 
         if not texto or not telefono:
