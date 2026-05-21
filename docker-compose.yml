@@ -6,6 +6,8 @@ services:
       - "${PORT:-8000}:8000"
     env_file:
       - .env
+    environment:
+      - ADMIN_KEY=${ADMIN_KEY:-cambia-questa-chiave}
     volumes:
       - ./knowledge:/app/knowledge
       - ./config:/app/config

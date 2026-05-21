@@ -1,12 +1,13 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from datetime import date
+from fastapi import FastAPI, Request, HTTPException, Header, Depends
 from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial
+from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, get_appuntamenti_giorno
 from agent.providers import obtener_proveedor
 
 load_dotenv()
@@ -18,6 +19,30 @@ logger = logging.getLogger("agentkit")
 
 proveedor = obtener_proveedor()
 PORT = int(os.getenv("PORT", 8000))
+
+
+async def verificar_admin(x_admin_key: str = Header(default=None)):
+    """Dependency FastAPI: valida X-Admin-Key contro ADMIN_KEY in .env."""
+    admin_key = os.getenv("ADMIN_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=503, detail="ADMIN_KEY non configurata sul server")
+    if x_admin_key != admin_key:
+        raise HTTPException(status_code=401, detail="API key non valida o mancante")
+
+
+def _serializza_appuntamenti(appuntamenti) -> list[dict]:
+    return [
+        {
+            "id": a.id,
+            "ora": a.data_ora.strftime("%H:%M"),
+            "nome_cliente": a.nome_cliente,
+            "servizio": a.servizio,
+            "durata_minuti": a.durata_minuti,
+            "telefono": a.telefono,
+            "stato": a.stato,
+        }
+        for a in appuntamenti
+    ]
 
 
 @asynccontextmanager
@@ -65,6 +90,37 @@ async def webhook_verificacion(request: Request):
     if resultado is not None:
         return PlainTextResponse(str(resultado))
     return {"status": "ok"}
+
+
+@app.get("/admin/appuntamenti/oggi", dependencies=[Depends(verificar_admin)])
+async def admin_oggi():
+    """Appuntamenti di oggi — shortcut senza parametri."""
+    oggi = date.today()
+    appuntamenti = await get_appuntamenti_giorno(oggi)
+    return {
+        "data": oggi.isoformat(),
+        "totale": len(appuntamenti),
+        "appuntamenti": _serializza_appuntamenti(appuntamenti),
+    }
+
+
+@app.get("/admin/appuntamenti", dependencies=[Depends(verificar_admin)])
+async def admin_appuntamenti(data: str):
+    """
+    Appuntamenti per una data specifica.
+    Query param: data=YYYY-MM-DD
+    Header:      X-Admin-Key: <valore di ADMIN_KEY in .env>
+    """
+    try:
+        giorno = date.fromisoformat(data)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato data non valido. Usa YYYY-MM-DD")
+    appuntamenti = await get_appuntamenti_giorno(giorno)
+    return {
+        "data": data,
+        "totale": len(appuntamenti),
+        "appuntamenti": _serializza_appuntamenti(appuntamenti),
+    }
 
 
 @app.post("/webhook")
