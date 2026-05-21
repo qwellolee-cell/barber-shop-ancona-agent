@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Barber Shop Ancona — Dashboard</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; min-height: 100vh; }
+
+/* ── LOGIN ─────────────────────────────────── */
+#screen-login {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px;
+}
+#screen-calendar { display: none; max-width: 480px; margin: 0 auto; padding-bottom: 60px; }
+
+.login-card {
+  background: white; border-radius: 16px; padding: 40px 32px;
+  width: 100%; max-width: 360px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08); text-align: center;
+}
+.login-logo  { font-size: 3rem; margin-bottom: 8px; }
+.login-title { font-size: 1.25rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
+.login-sub   { font-size: .875rem; color: #6B7280; margin-bottom: 32px; }
+.login-label {
+  display: block; text-align: left;
+  font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: 6px;
+}
+.login-input {
+  width: 100%; padding: 12px 16px;
+  border: 1.5px solid #D1D5DB; border-radius: 8px;
+  font-size: 1rem; outline: none; transition: border-color .15s;
+}
+.login-input:focus { border-color: #1F2937; }
+.login-btn {
+  width: 100%; padding: 12px; margin-top: 16px;
+  background: #1F2937; color: white; border: none;
+  border-radius: 8px; font-size: 1rem; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.login-btn:hover    { background: #374151; }
+.login-btn:disabled { background: #9CA3AF; cursor: not-allowed; }
+.login-error { margin-top: 12px; color: #DC2626; font-size: .875rem; min-height: 20px; }
+
+/* ── HEADER CALENDARIO ──────────────────── */
+.cal-header {
+  background: white; padding: 14px 16px;
+  position: sticky; top: 0; z-index: 10;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.cal-nav {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 8px;
+}
+.nav-btn {
+  padding: 8px 14px; border: 1.5px solid #D1D5DB;
+  background: white; border-radius: 8px;
+  font-size: .875rem; cursor: pointer;
+  transition: background .15s; white-space: nowrap;
+}
+.nav-btn:hover        { background: #F9FAFB; }
+.nav-btn.primary      { background: #1F2937; color: white; border-color: #1F2937; }
+.nav-btn.primary:hover{ background: #374151; }
+.cal-date-label {
+  font-size: .95rem; font-weight: 700; color: #111827;
+  text-align: center; flex: 1; line-height: 1.3;
+}
+.cal-subheader {
+  display: flex; align-items: center;
+  justify-content: space-between; margin-top: 10px;
+}
+.cal-count       { font-size: .875rem; color: #6B7280; }
+.cal-count strong{ color: #111827; }
+.refresh-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 12px; border: 1.5px solid #D1D5DB;
+  background: white; border-radius: 6px;
+  font-size: .8rem; cursor: pointer;
+}
+.refresh-btn:hover { background: #F9FAFB; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinning { display: inline-block; animation: spin .7s linear infinite; }
+
+/* ── BODY CALENDARIO ────────────────────── */
+.cal-body    { padding: 16px; }
+.section-title {
+  font-size: .7rem; font-weight: 700; color: #9CA3AF;
+  letter-spacing: .09em; text-transform: uppercase;
+  margin: 20px 0 8px;
+}
+.section-title:first-child { margin-top: 0; }
+.empty-section {
+  background: white; border-radius: 8px; padding: 14px;
+  text-align: center; color: #9CA3AF; font-size: .875rem;
+  border: 1.5px dashed #E5E7EB;
+}
+.state-msg {
+  text-align: center; padding: 56px 24px;
+  font-size: .9rem; color: #6B7280;
+}
+.state-msg .ico { font-size: 2.2rem; display: block; margin-bottom: 10px; }
+
+/* ── CARD APPUNTAMENTO ──────────────────── */
+.apt-card {
+  border-left: 4px solid #6B7280; border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.card-top     { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.card-time    { font-size: 1.35rem; font-weight: 700; color: #111827; line-height: 1; }
+.card-name    { font-size: 1rem; font-weight: 600; color: #1F2937; }
+.card-service { font-size: .85rem; color: #6B7280; margin-bottom: 4px; }
+.card-phone   { font-size: .8rem; color: #9CA3AF; }
+
+/* ── FOOTER ─────────────────────────────── */
+.footer-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: white; border-top: 1px solid #E5E7EB;
+  padding: 10px; text-align: center;
+}
+.logout-btn {
+  background: none; border: none;
+  color: #9CA3AF; font-size: .8rem;
+  cursor: pointer; text-decoration: underline;
+}
+.logout-btn:hover { color: #DC2626; }
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══════════════════════════════════════════════ -->
+<div id="screen-login">
+  <div class="login-card">
+    <div class="login-logo">✂️</div>
+    <div class="login-title">Barber Shop Ancona</div>
+    <div class="login-sub">Dashboard appuntamenti</div>
+    <label class="login-label" for="key-input">Chiave di accesso</label>
+    <input id="key-input" class="login-input" type="password"
+           placeholder="Inserisci la chiave admin"
+           onkeydown="if(event.key==='Enter') doLogin()">
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Accedi</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ══ CALENDARIO ═════════════════════════════════════════ -->
+<div id="screen-calendar">
+
+  <div class="cal-header">
+    <div class="cal-nav">
+      <button class="nav-btn" onclick="navigate(-1)">← Ieri</button>
+      <div class="cal-date-label" id="cal-date-label">—</div>
+      <button class="nav-btn" onclick="navigate(1)">Domani →</button>
+    </div>
+    <div class="cal-subheader">
+      <div class="cal-count" id="cal-count">&nbsp;</div>
+      <div style="display:flex;gap:8px">
+        <button class="nav-btn primary" onclick="goToday()">Oggi</button>
+        <button class="refresh-btn" id="refresh-btn" onclick="loadDay()">
+          <span id="spin-icon">⟳</span>&nbsp;Aggiorna
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cal-body" id="cal-body">
+    <div class="state-msg"><span class="ico">⏳</span>Caricamento...</div>
+  </div>
+
+  <div class="footer-bar">
+    <button class="logout-btn" onclick="doLogout()">Disconnetti</button>
+  </div>
+
+</div>
+
+<script>
+// ── Costanti ─────────────────────────────────────────────
+const GIORNI = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+const MESI   = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                 'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+let currentDate   = new Date();
+let refreshTimer  = null;
+let isLoading     = false;
+
+// ── Avvio ─────────────────────────────────────────────────
+function init() {
+  if (localStorage.getItem('adminKey')) showCalendar();
+  else showLogin();
+}
+
+function showLogin() {
+  clearInterval(refreshTimer);
+  document.getElementById('screen-login').style.display    = 'flex';
+  document.getElementById('screen-calendar').style.display = 'none';
+}
+
+function showCalendar() {
+  document.getElementById('screen-login').style.display    = 'none';
+  document.getElementById('screen-calendar').style.display = 'block';
+  currentDate  = new Date();
+  loadDay();
+  refreshTimer = setInterval(loadDay, 60000);
+}
+
+// ── Login / Logout ────────────────────────────────────────
+async function doLogin() {
+  const key = document.getElementById('key-input').value.trim();
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+
+  if (!key) { err.textContent = 'Inserisci la chiave.'; return; }
+
+  btn.disabled     = true;
+  btn.textContent  = 'Verifica...';
+  err.textContent  = '';
+
+  try {
+    const res = await fetch('/admin/appuntamenti?data=' + toISODate(new Date()), {
+      headers: { 'X-Admin-Key': key }
+    });
+    if (res.ok) {
+      localStorage.setItem('adminKey', key);
+      showCalendar();
+    } else if (res.status === 401) {
+      err.textContent = 'Chiave non valida.';
+    } else {
+      err.textContent = 'Errore server (' + res.status + '). Riprova.';
+    }
+  } catch {
+    err.textContent = 'Impossibile raggiungere il server.';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Accedi';
+  }
+}
+
+function doLogout() {
+  localStorage.removeItem('adminKey');
+  document.getElementById('key-input').value  = '';
+  document.getElementById('login-error').textContent = '';
+  showLogin();
+}
+
+// ── Navigazione ───────────────────────────────────────────
+function navigate(delta) {
+  const d = new Date(currentDate);
+  d.setDate(d.getDate() + delta);
+  currentDate = d;
+  loadDay();
+}
+
+function goToday() {
+  currentDate = new Date();
+  loadDay();
+}
+
+// ── Caricamento dati ──────────────────────────────────────
+async function loadDay() {
+  if (isLoading) return;
+  isLoading = true;
+
+  const spinEl = document.getElementById('spin-icon');
+  spinEl.classList.add('spinning');
+  document.getElementById('cal-date-label').textContent = formatDate(currentDate);
+
+  const key     = localStorage.getItem('adminKey');
+  const dateStr = toISODate(currentDate);
+
+  try {
+    const res = await fetch('/admin/appuntamenti?data=' + dateStr, {
+      headers: { 'X-Admin-Key': key }
+    });
+    if (res.status === 401) { doLogout(); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const data = await res.json();
+    renderCalendar(data);
+
+  } catch {
+    document.getElementById('cal-body').innerHTML =
+      '<div class="state-msg"><span class="ico">⚠️</span>Errore di connessione.<br>Riprova tra poco.</div>';
+    document.getElementById('cal-count').innerHTML = '';
+  } finally {
+    isLoading = false;
+    spinEl.classList.remove('spinning');
+  }
+}
+
+// ── Rendering ─────────────────────────────────────────────
+function renderCalendar(data) {
+  const n = data.totale;
+  document.getElementById('cal-count').innerHTML = n === 0
+    ? 'Nessun appuntamento'
+    : '<strong>' + n + '</strong> appuntament' + (n === 1 ? 'o' : 'i');
+
+  const mattina    = data.appuntamenti.filter(a => a.ora < '13:00');
+  const pomeriggio = data.appuntamenti.filter(a => a.ora >= '13:00');
+
+  document.getElementById('cal-body').innerHTML =
+    sectionHtml('Mattina (09:00 – 13:00)', mattina) +
+    sectionHtml('Pomeriggio (15:00 – 19:00)', pomeriggio);
+}
+
+function sectionHtml(title, apts) {
+  const inner = apts.length
+    ? apts.map(cardHtml).join('')
+    : '<div class="empty-section">Nessun appuntamento</div>';
+  return '<div class="section-title">' + title + '</div>' + inner;
+}
+
+function cardHtml(a) {
+  const s = cardStyle(a.servizio);
+  return '<div class="apt-card" style="background:' + s.bg + ';border-left-color:' + s.border + '">' +
+    '<div class="card-top">' +
+      '<span class="card-time">' + a.ora + '</span>' +
+      '<span class="card-name">' + escHtml(a.nome_cliente) + '</span>' +
+    '</div>' +
+    '<div class="card-service">' + escHtml(a.servizio) + ' · ' + a.durata_minuti + ' min</div>' +
+    '<div class="card-phone">📱 ' + escHtml(a.telefono) + '</div>' +
+  '</div>';
+}
+
+function cardStyle(servizio) {
+  const s = servizio.toLowerCase();
+  if (s.includes('experience') || s.includes('pacchetto'))
+    return { bg: '#FFF7ED', border: '#F97316' };
+  if (s.includes('trattamento'))
+    return { bg: '#F5F3FF', border: '#8B5CF6' };
+  if (s.includes('barba') || s.includes('rasatura'))
+    return { bg: '#ECFDF5', border: '#10B981' };
+  if (s.includes('taglio') || s.includes('sfumatura'))
+    return { bg: '#EBF4FF', border: '#3B82F6' };
+  return { bg: '#F9FAFB', border: '#6B7280' };
+}
+
+// ── Utilità ───────────────────────────────────────────────
+function toISODate(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+function formatDate(d) {
+  return GIORNI[d.getDay()] + ' ' + d.getDate() + ' ' + MESI[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Start ─────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
