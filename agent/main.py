@@ -1,9 +1,11 @@
 import os
+import pathlib
 import logging
 from contextlib import asynccontextmanager
 from datetime import date
 from fastapi import FastAPI, Request, HTTPException, Header, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
@@ -65,6 +67,15 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+DASHBOARD_DIR = pathlib.Path(__file__).parent.parent / "dashboard"
+if DASHBOARD_DIR.exists():
+    app.mount("/dashboard", StaticFiles(directory=DASHBOARD_DIR, html=True), name="dashboard")
+
+
+@app.get("/admin")
+async def redirect_admin():
+    return RedirectResponse(url="/dashboard")
 
 
 @app.get("/")
