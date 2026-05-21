@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, get_appuntamenti_giorno
+from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, get_appuntamenti_giorno, cancella_appuntamento
 from agent.providers import obtener_proveedor
 from agent.scheduler import crea_scheduler
 
@@ -138,6 +138,18 @@ async def admin_appuntamenti(data: str):
         "totale": len(appuntamenti),
         "appuntamenti": _serializza_appuntamenti(appuntamenti),
     }
+
+
+@app.delete("/admin/appuntamenti/{appuntamento_id}", dependencies=[Depends(verificar_admin)])
+async def admin_cancella_appuntamento(appuntamento_id: int):
+    """
+    Cancella un appuntamento (soft delete — stato='cancellato').
+    Header: X-Admin-Key
+    """
+    successo = await cancella_appuntamento(appuntamento_id)
+    if not successo:
+        raise HTTPException(status_code=404, detail="Appuntamento non trovato")
+    return {"successo": True, "id": appuntamento_id}
 
 
 @app.post("/webhook")
