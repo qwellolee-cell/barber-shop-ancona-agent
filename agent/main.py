@@ -509,13 +509,20 @@ async def admin_crea_tenant(body: NuovoTenantRequest):
     # Carica template business-type per i default
     bt_template = _carica_business_type_template(body.business_type)
 
-    # Genera settings.yaml
-    slot_gran = bt_template.get("slot_granularity_min", 15)
-    reminder_finestre = bt_template.get("reminder_finestre_ore", [24])
-    reminder_msg = bt_template.get("reminder_messaggio_template",
-        "Ciao {nome_cliente}! Ricorda il tuo appuntamento alle *{ora}* da {nome_business}. {emoji_firma}")
-    orari_default = bt_template.get("orari_default", [])
-    giorni_chiusi = bt_template.get("giorni_chiusi_default", [])
+    # Genera settings.yaml — legge correttamente dalla struttura nested del template
+    scheduling = bt_template.get("scheduling", {})
+    slot_gran = scheduling.get("slot_granularity_min", 15)
+
+    reminder_section = bt_template.get("reminder", {})
+    reminder_finestre = reminder_section.get("finestre_ore", [24])
+    _reminder_raw = reminder_section.get(
+        "messaggio_template",
+        "Ciao {nome_cliente}! Ricorda il tuo appuntamento alle *{ora}* da {nome_business}. {emoji_firma}"
+    ).strip()
+    # Re-indent ogni riga di 4 spazi (YAML block scalar "|" richiede indentazione uniforme)
+    reminder_msg = "\n    ".join(_reminder_raw.splitlines())
+
+    orari_default = bt_template.get("orari_default", [])  # lista di {giorno, aperto, turni}
 
     # Genera sezione risorse nello YAML
     if body.risorse:
@@ -541,7 +548,7 @@ async def admin_crea_tenant(body: NuovoTenantRequest):
 
     # Genera orari YAML (usa quelli del template oppure orari tipici)
     if orari_default:
-        orari_yaml = _genera_orari_yaml_da_template(orari_default, giorni_chiusi)
+        orari_yaml = _genera_orari_yaml_da_template(orari_default)
     else:
         orari_yaml = _genera_orari_yaml_default()
 
@@ -635,23 +642,48 @@ def _carica_business_type_template(business_type: str) -> dict:
         return {}
 
 
-def _genera_orari_yaml_da_template(orari_default: list, giorni_chiusi: list) -> str:
-    """Genera la sezione orari YAML dai dati del template business-type."""
+def _genera_orari_yaml_da_template(orari_default: list) -> str:
+    """
+    Genera la sezione orari YAML dal campo orari_default del template business-type.
+
+    Il template usa il formato:
+      - giorno: 0        # ISO: 0=lunedì … 6=domenica
+        aperto: false
+      - giorno: 1
+        aperto: true
+        turni: ["09:00-13:00", "15:00-19:00"]   # stringhe "HH:MM-HH:MM"
+    """
     GIORNI_NOMI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+
+    # Indicizza i giorni della lista template per numero ISO
+    template_per_giorno: dict = {}
+    for entry in orari_default:
+        g = entry.get("giorno")
+        if g is not None:
+            template_per_giorno[int(g)] = entry
+
     linee = ["orari:"]
     for idx, nome in enumerate(GIORNI_NOMI):
-        chiuso = nome in [g.lower() for g in giorni_chiusi]
+        entry = template_per_giorno.get(idx, {})
+        aperto = entry.get("aperto", True)
         linee.append(f"  - giorno: {idx}      # {nome}")
-        if chiuso:
+        if not aperto:
             linee.append("    aperto: false")
         else:
             linee.append("    aperto: true")
-            linee.append("    turni:")
-            for turno in orari_default:
-                ap = turno.get("apertura", "09:00")
-                ch = turno.get("chiusura", "18:00")
-                linee.append(f'      - apertura: "{ap}"')
-                linee.append(f'        chiusura: "{ch}"')
+            turni_raw = entry.get("turni", ["09:00-18:00"])
+            if turni_raw:
+                linee.append("    turni:")
+                for t in turni_raw:
+                    if isinstance(t, str) and "-" in t:
+                        ap, ch = t.split("-", 1)
+                    elif isinstance(t, dict):
+                        ap = t.get("apertura", "09:00")
+                        ch = t.get("chiusura", "18:00")
+                    else:
+                        ap, ch = "09:00", "18:00"
+                    linee.append(f'      - apertura: "{ap.strip()}"')
+                    linee.append(f'        chiusura: "{ch.strip()}"')
     return "\n".join(linee)
 
 
