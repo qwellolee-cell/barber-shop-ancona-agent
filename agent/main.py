@@ -285,23 +285,29 @@ async def _processa_webhook(request: Request, tenant_slug: Optional[str]) -> dic
     """
     Logica comune per tutti i webhook.
     Risolve il tenant, processa i messaggi, genera risposta con Claude.
+
+    Restituisce sempre HTTP 200 così il provider non fa retry inutili.
+    Gli errori sono loggati ma non ri-alzati come 500.
     """
     try:
-        body_bytes = await request.body()
-        logger.debug(f"Webhook: {body_bytes.decode('utf-8', errors='replace')[:300]}")
-
         # Risolvi tenant — da slug URL o da env default
         tenant_config, tenant_id = await _resolve_tenant(tenant_slug)
 
         mensajes = await proveedor.parsear_webhook(request)
 
+        if not mensajes:
+            # Il provider ha scartato il webhook (tipo non gestito, messaggio vuoto, ecc.)
+            # Il log dettagliato è già dentro parsear_webhook — qui solo conferma silenziosa
+            return {"status": "ok", "tenant": tenant_config.slug, "processed": 0}
+
+        processati = 0
         for msg in mensajes:
             if msg.es_propio or not msg.texto:
                 continue
 
-            logger.info(f"[{tenant_config.slug}] Msg da {msg.telefono}: {msg.texto}")
+            logger.info(f"[{tenant_config.slug}] ← {msg.telefono}: {msg.texto[:100]!r}")
 
-            # Storico conversazione scoped per tenant
+            # Storico conversazione scoped per tenant (vuoto per numeri nuovi — va bene)
             historial = await obtener_historial(msg.telefono, tenant_id=tenant_id)
 
             # Genera risposta con Claude — passando tenant_config e tenant_id
@@ -317,17 +323,26 @@ async def _processa_webhook(request: Request, tenant_slug: Optional[str]) -> dic
             await guardar_mensaje(msg.telefono, "user", msg.texto, tenant_id=tenant_id)
             await guardar_mensaje(msg.telefono, "assistant", respuesta, tenant_id=tenant_id)
 
-            # Invia risposta via WhatsApp
-            await proveedor.enviar_mensaje(msg.telefono, respuesta)
-            logger.info(f"[{tenant_config.slug}] Risposta a {msg.telefono}: {respuesta[:80]}...")
+            # Invia risposta via WhatsApp — logga esito
+            inviato = await proveedor.enviar_mensaje(msg.telefono, respuesta)
+            if inviato:
+                logger.info(f"[{tenant_config.slug}] → {msg.telefono}: {respuesta[:80]!r}...")
+            else:
+                logger.error(
+                    f"[{tenant_config.slug}] INVIO FALLITO a {msg.telefono}. "
+                    f"Controlla le credenziali GREEN_API_INSTANCE_ID / GREEN_API_TOKEN nel .env."
+                )
 
-        return {"status": "ok", "tenant": tenant_config.slug}
+            processati += 1
+
+        return {"status": "ok", "tenant": tenant_config.slug, "processed": processati}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Errore webhook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Errore webhook [{tenant_slug}]: {e}", exc_info=True)
+        # Ritorna 200 comunque — così il provider non ritenta all'infinito
+        return {"status": "error", "detail": str(e)}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
