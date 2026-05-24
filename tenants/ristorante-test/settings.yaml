@@ -1,0 +1,89 @@
+# tenants/ristorante-test/settings.yaml
+# Tenant di test per ristorante — usato per validare il multi-tenant in Fase 2/3
+# Cleek
+
+tenant:
+  slug: ristorante-test
+  nome: "Trattoria da Mario"
+  business_type: ristorante
+  lingua: it
+
+agente:
+  nome: "Sofia"
+  tono: "accogliente e caldo"
+  emoji_firma: "🍽️"
+
+# Orari ristorante: pranzo e cena, chiuso il lunedì
+orari:
+  - giorno: 0      # lunedì
+    aperto: false
+  - giorno: 1      # martedì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 3      # giovedì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 4      # venerdì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 5      # sabato
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 6      # domenica
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+
+scheduling:
+  slot_granularity_min: 30           # slot ogni 30 minuti
+
+reminder:
+  finestre_ore: [2]                  # solo 2h prima per i ristoranti
+  messaggio_template: |
+    Ciao {nome_cliente}! 🍽️
+    Ricorda che tra circa 2 ore hai un tavolo prenotato
+    alle *{ora}* da {nome_business}.
+    Per cancellare scrivi ANNULLA.
+    Ti aspettiamo! {emoji_firma}
+
+risorse:
+  - nome: "Tavolo 1"
+    tipo: tavolo
+    capienza: 4
+    attivo: true
+  - nome: "Tavolo 2"
+    tipo: tavolo
+    capienza: 4
+    attivo: true
+  - nome: "Tavolo 3"
+    tipo: tavolo
+    capienza: 6
+    attivo: true
+  - nome: "Tavolo 4 (privato)"
+    tipo: tavolo
+    capienza: 8
+    attivo: true

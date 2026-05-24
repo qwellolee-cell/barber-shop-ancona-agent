@@ -1,3 +1,14 @@
+# agent/brain.py — Cervello del agente: Claude API + tool use multi-tenant
+# Cleek — Fase 2
+
+"""
+Integrazione con l'API di Anthropic Claude.
+generar_respuesta() riceve tenant_config e tenant_id per:
+  - usare il system prompt specifico del tenant
+  - passare tenant_id a tutte le operazioni sul DB
+  - iniettare il contesto data/ora corretto
+"""
+
 import os
 import json
 import yaml
@@ -10,6 +21,11 @@ load_dotenv()
 logger = logging.getLogger("agentkit")
 
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool definitions — Claude sceglie quale chiamare
+# In Fase 3 saranno generati dinamicamente per tipo di business
+# ─────────────────────────────────────────────────────────────────────────────
 
 TOOLS = [
     {
@@ -96,18 +112,36 @@ TOOLS = [
 ]
 
 
-async def _esegui_tool(nome: str, params: dict, telefono: str) -> dict:
-    """Esegue il tool richiesto da Claude e ritorna il risultato come dict."""
+# ─────────────────────────────────────────────────────────────────────────────
+# Esecuzione tool — scoped per tenant
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _esegui_tool(
+    nome: str,
+    params: dict,
+    telefono: str,
+    tenant_id: int = 1,
+    tenant_config=None,
+) -> dict:
+    """
+    Esegue il tool richiesto da Claude e ritorna il risultato come dict.
+    Tutte le operazioni sul DB sono filtrate per tenant_id.
+    """
     import agent.memory as memory
 
-    logger.info(f"Tool chiamato: {nome} — params: {params}")
+    logger.info(f"[tenant={tenant_id}] Tool chiamato: {nome} — params: {params}")
 
     if nome == "controlla_disponibilita":
         try:
             data = date.fromisoformat(params["data"])
         except ValueError:
             return {"errore": f"Formato data non valido: {params['data']}. Usa YYYY-MM-DD."}
-        slots = await memory.slot_disponibili(data, params["durata_minuti"])
+        slots = await memory.slot_disponibili(
+            data,
+            params["durata_minuti"],
+            tenant_config=tenant_config,
+            tenant_id=tenant_id,
+        )
         return {"slots_disponibili": slots, "totale": len(slots)}
 
     if nome == "prenota_appuntamento":
@@ -121,6 +155,7 @@ async def _esegui_tool(nome: str, params: dict, telefono: str) -> dict:
             servizio=params["servizio"],
             data_ora=data_ora,
             durata_minuti=params["durata_minuti"],
+            tenant_id=tenant_id,
         )
         if apt is None:
             return {
@@ -135,7 +170,7 @@ async def _esegui_tool(nome: str, params: dict, telefono: str) -> dict:
         }
 
     if nome == "visualizza_appuntamento":
-        apt = await memory.get_appuntamento_cliente(telefono)
+        apt = await memory.get_appuntamento_cliente(telefono, tenant_id=tenant_id)
         if apt is None:
             return {"trovato": False}
         return {
@@ -149,52 +184,122 @@ async def _esegui_tool(nome: str, params: dict, telefono: str) -> dict:
         }
 
     if nome == "cancella_appuntamento":
-        successo = await memory.cancella_appuntamento(params["appuntamento_id"])
+        successo = await memory.cancella_appuntamento(
+            params["appuntamento_id"],
+            tenant_id=tenant_id,
+        )
         return {"successo": successo}
 
     return {"errore": f"Tool sconosciuto: {nome}"}
 
 
-def cargar_config_prompts() -> dict:
+# ─────────────────────────────────────────────────────────────────────────────
+# Caricamento prompt — da config del tenant o da prompts.yaml legacy
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _carica_prompt_tenant(tenant_config=None) -> str:
+    """
+    Carica il system prompt del tenant.
+    Priorità: tenants/{slug}/prompts.yaml → config/prompts.yaml → fallback.
+    """
+    # 1. Prova il file prompts.yaml specifico del tenant
+    if tenant_config is not None:
+        tenant_prompts = f"tenants/{tenant_config.slug}/prompts.yaml"
+        try:
+            with open(tenant_prompts, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+                if "system_prompt" in data:
+                    return data["system_prompt"]
+        except FileNotFoundError:
+            pass
+
+    # 2. Fallback a config/prompts.yaml (file originale del progetto)
     try:
         with open("config/prompts.yaml", "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+            data = yaml.safe_load(f) or {}
+            return data.get("system_prompt", "Sei un assistente utile. Rispondi in italiano.")
     except FileNotFoundError:
-        logger.error("config/prompts.yaml no encontrado")
-        return {}
+        pass
+
+    return "Sei un assistente utile. Rispondi in italiano."
 
 
-def cargar_system_prompt() -> str:
-    config = cargar_config_prompts()
-    return config.get("system_prompt", "Sei un assistente utile. Rispondi in italiano.")
+def _carica_messaggio_errore(tenant_config=None) -> str:
+    """Carica il messaggio di errore dal prompt del tenant."""
+    if tenant_config is not None:
+        tenant_prompts = f"tenants/{tenant_config.slug}/prompts.yaml"
+        try:
+            with open(tenant_prompts, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+                if "error_message" in data:
+                    return data["error_message"]
+        except FileNotFoundError:
+            pass
+    try:
+        with open("config/prompts.yaml", "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+            return data.get(
+                "error_message",
+                "Mi dispiace, sto avendo un problema tecnico. Riprova tra qualche minuto!"
+            )
+    except FileNotFoundError:
+        return "Mi dispiace, sto avendo un problema tecnico. Riprova tra qualche minuto!"
 
 
-def obtener_mensaje_error() -> str:
-    config = cargar_config_prompts()
-    return config.get("error_message", "Mi dispiace, sto avendo un problema tecnico. Riprova tra qualche minuto!")
+def _carica_messaggio_fallback(tenant_config=None) -> str:
+    """Carica il messaggio di fallback dal prompt del tenant."""
+    if tenant_config is not None:
+        tenant_prompts = f"tenants/{tenant_config.slug}/prompts.yaml"
+        try:
+            with open(tenant_prompts, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+                if "fallback_message" in data:
+                    return data["fallback_message"]
+        except FileNotFoundError:
+            pass
+    try:
+        with open("config/prompts.yaml", "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+            return data.get(
+                "fallback_message",
+                "Scusa, non ho capito bene. Puoi riscrivere? Sono qui per aiutarti 😊"
+            )
+    except FileNotFoundError:
+        return "Scusa, non ho capito bene. Puoi riscrivere?"
 
 
-def obtener_mensaje_fallback() -> str:
-    config = cargar_config_prompts()
-    return config.get("fallback_message", "Scusa, non ho capito bene. Puoi riscrivere? Sono qui per aiutarti 😊")
+# ─────────────────────────────────────────────────────────────────────────────
+# Funzione principale — genera risposta con Claude
+# ─────────────────────────────────────────────────────────────────────────────
 
-
-async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) -> str:
+async def generar_respuesta(
+    mensaje: str,
+    historial: list[dict],
+    telefono: str,
+    tenant_config=None,
+    tenant_id: int = 1,
+) -> str:
     """
     Genera una risposta usando Claude con tool_use per le operazioni sul calendario.
     Continua il loop finché Claude non chiude con end_turn.
+
+    Args:
+        mensaje: testo del messaggio dell'utente
+        historial: storia della conversazione
+        telefono: numero del cliente (per lookup appuntamenti)
+        tenant_config: TenantConfig del tenant corrente
+        tenant_id: id numerico del tenant per le query DB
     """
     if not mensaje or len(mensaje.strip()) < 2:
-        return obtener_mensaje_fallback()
+        return _carica_messaggio_fallback(tenant_config)
 
-    system_prompt = cargar_system_prompt()
+    system_prompt = _carica_prompt_tenant(tenant_config)
 
-    # Inietta data e ora correnti perché Claude possa risolvere
-    # riferimenti relativi come "domani", "dopodomani", "venerdì".
+    # Inietta data e ora correnti per risolvere "domani", "dopodomani", ecc.
     now = datetime.now()
-    GIORNI_IT = ["lunedì","martedì","mercoledì","giovedì","venerdì","sabato","domenica"]
-    MESI_IT   = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
-                 "luglio","agosto","settembre","ottobre","novembre","dicembre"]
+    GIORNI_IT = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+    MESI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+               "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
     data_contesto = (
         f"Data e ora attuali: {GIORNI_IT[now.weekday()]} "
         f"{now.day} {MESI_IT[now.month - 1]} {now.year}, ore {now.strftime('%H:%M')}."
@@ -205,7 +310,7 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) 
     mensajes.append({"role": "user", "content": mensaje})
 
     try:
-        for _ in range(10):  # max 10 iterazioni per evitare loop infiniti
+        for _ in range(10):  # max 10 iterazioni tool_use
             response = await client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=1024,
@@ -214,47 +319,51 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) 
                 messages=mensajes,
             )
             logger.info(
-                f"Tokens: {response.usage.input_tokens} in / {response.usage.output_tokens} out "
+                f"[tenant={tenant_id}] Tokens: "
+                f"{response.usage.input_tokens} in / {response.usage.output_tokens} out "
                 f"— stop: {response.stop_reason}"
             )
 
             if response.stop_reason == "end_turn":
                 testo = next(
                     (block.text for block in response.content if hasattr(block, "text")),
-                    obtener_mensaje_fallback(),
+                    _carica_messaggio_fallback(tenant_config),
                 )
                 return testo
 
             if response.stop_reason == "tool_use":
-                # Aggiunge la risposta dell'assistente (con i tool_use block) alla conversazione
                 mensajes.append({"role": "assistant", "content": response.content})
 
-                # Esegue tutti i tool richiesti in questa risposta
                 tool_results = []
                 for block in response.content:
                     if block.type == "tool_use":
-                        risultato = await _esegui_tool(block.name, block.input, telefono)
+                        risultato = await _esegui_tool(
+                            block.name,
+                            block.input,
+                            telefono,
+                            tenant_id=tenant_id,
+                            tenant_config=tenant_config,
+                        )
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block.id,
                             "content": json.dumps(risultato, ensure_ascii=False, default=str),
                         })
-                        logger.info(f"Tool {block.name} → {risultato}")
+                        logger.info(f"[tenant={tenant_id}] Tool {block.name} → {risultato}")
 
                 mensajes.append({"role": "user", "content": tool_results})
                 continue
 
-            # stop_reason inatteso (es. max_tokens)
             logger.warning(f"Stop reason inatteso: {response.stop_reason}")
             testo = next(
                 (block.text for block in response.content if hasattr(block, "text")),
                 None,
             )
-            return testo or obtener_mensaje_error()
+            return testo or _carica_messaggio_errore(tenant_config)
 
-        logger.error("Raggiunto il limite di iterazioni tool_use")
-        return obtener_mensaje_error()
+        logger.error(f"[tenant={tenant_id}] Raggiunto limite iterazioni tool_use")
+        return _carica_messaggio_errore(tenant_config)
 
     except Exception as e:
-        logger.error(f"Errore Claude API: {e}")
-        return obtener_mensaje_error()
+        logger.error(f"[tenant={tenant_id}] Errore Claude API: {e}")
+        return _carica_messaggio_errore(tenant_config)
