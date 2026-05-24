@@ -225,6 +225,23 @@ async def lista_tenants():
 # Debug
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Buffer in-memory degli ultimi 20 eventi (per diagnosi senza accesso ai log)
+_eventi_recenti: list[dict] = []
+_MAX_EVENTI = 20
+
+
+def _registra_evento(tipo: str, dati: dict):
+    """Aggiunge un evento al buffer di diagnostica."""
+    from datetime import datetime
+    _eventi_recenti.append({
+        "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "tipo": tipo,
+        **dati,
+    })
+    if len(_eventi_recenti) > _MAX_EVENTI:
+        _eventi_recenti.pop(0)
+
+
 @app.post("/debug/webhook")
 async def debug_webhook(request: Request):
     """Endpoint di diagnostica — mostra il payload raw ricevuto."""
@@ -235,6 +252,51 @@ async def debug_webhook(request: Request):
     except Exception as e:
         raw = await request.body()
         return {"error": str(e), "raw": raw.decode("utf-8", errors="replace")}
+
+
+@app.get("/debug/status", dependencies=[Depends(verificar_admin)])
+async def debug_status():
+    """
+    Mostra gli ultimi eventi di webhook ricevuti e lo stato GreenAPI.
+    Utile per diagnosticare problemi senza accesso ai log del server.
+    Richiede X-Admin-Key.
+    """
+    return {
+        "eventi_recenti": list(reversed(_eventi_recenti)),
+        "istruzioni": {
+            "step1": "Fai inviare un messaggio WhatsApp al bot da un numero nuovo",
+            "step2": "Attendi 10 secondi",
+            "step3": "Ricarica questa pagina — dovresti vedere l'evento 'webhook_ricevuto'",
+            "step4": "Se non vedi nulla → il webhook GreenAPI non arriva al server (controlla URL webhook in GreenAPI)",
+            "step5": "Se vedi 'invio_fallito' → le credenziali GreenAPI non sono valide o il piano non lo permette",
+        }
+    }
+
+
+@app.post("/debug/test-send", dependencies=[Depends(verificar_admin)])
+async def debug_test_send(numero: str):
+    """
+    Testa l'invio di un messaggio WhatsApp a un numero specifico.
+    Usa: POST /debug/test-send?numero=393331234567
+    Richiede X-Admin-Key.
+    """
+    messaggio_test = "✅ Test Cleek: se ricevi questo messaggio, il bot funziona correttamente!"
+    ok = await proveedor.enviar_mensaje(numero, messaggio_test)
+    risultato = {
+        "numero": numero,
+        "inviato": ok,
+        "provider": proveedor.__class__.__name__,
+    }
+    if not ok:
+        risultato["errore"] = (
+            "Invio fallito. Possibili cause:\n"
+            "1. GREEN_API_INSTANCE_ID o GREEN_API_TOKEN non corretti\n"
+            "2. L'istanza GreenAPI non è attiva (controlla il pannello GreenAPI)\n"
+            "3. Il numero non ha WhatsApp\n"
+            "4. Piano GreenAPI non supporta l'invio a nuovi contatti"
+        )
+    _registra_evento("test_invio", risultato)
+    return risultato
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -297,7 +359,7 @@ async def _processa_webhook(request: Request, tenant_slug: Optional[str]) -> dic
 
         if not mensajes:
             # Il provider ha scartato il webhook (tipo non gestito, messaggio vuoto, ecc.)
-            # Il log dettagliato è già dentro parsear_webhook — qui solo conferma silenziosa
+            _registra_evento("webhook_ignorato", {"tenant": tenant_config.slug, "motivo": "parsear_webhook ha restituito lista vuota"})
             return {"status": "ok", "tenant": tenant_config.slug, "processed": 0}
 
         processati = 0
@@ -306,6 +368,11 @@ async def _processa_webhook(request: Request, tenant_slug: Optional[str]) -> dic
                 continue
 
             logger.info(f"[{tenant_config.slug}] ← {msg.telefono}: {msg.texto[:100]!r}")
+            _registra_evento("webhook_ricevuto", {
+                "tenant": tenant_config.slug,
+                "telefono": msg.telefono[-4:] + "****",  # oscura per privacy
+                "testo_preview": msg.texto[:60],
+            })
 
             # Storico conversazione scoped per tenant (vuoto per numeri nuovi — va bene)
             historial = await obtener_historial(msg.telefono, tenant_id=tenant_id)
@@ -327,11 +394,21 @@ async def _processa_webhook(request: Request, tenant_slug: Optional[str]) -> dic
             inviato = await proveedor.enviar_mensaje(msg.telefono, respuesta)
             if inviato:
                 logger.info(f"[{tenant_config.slug}] → {msg.telefono}: {respuesta[:80]!r}...")
+                _registra_evento("risposta_inviata", {
+                    "tenant": tenant_config.slug,
+                    "telefono": msg.telefono[-4:] + "****",
+                    "risposta_preview": respuesta[:80],
+                })
             else:
                 logger.error(
                     f"[{tenant_config.slug}] INVIO FALLITO a {msg.telefono}. "
                     f"Controlla le credenziali GREEN_API_INSTANCE_ID / GREEN_API_TOKEN nel .env."
                 )
+                _registra_evento("invio_fallito", {
+                    "tenant": tenant_config.slug,
+                    "telefono": msg.telefono[-4:] + "****",
+                    "problema": "GreenAPI ha rifiutato l'invio — controlla le credenziali e il piano",
+                })
 
             processati += 1
 
@@ -341,6 +418,7 @@ async def _processa_webhook(request: Request, tenant_slug: Optional[str]) -> dic
         raise
     except Exception as e:
         logger.error(f"Errore webhook [{tenant_slug}]: {e}", exc_info=True)
+        _registra_evento("errore_webhook", {"errore": str(e)[:200]})
         # Ritorna 200 comunque — così il provider non ritenta all'infinito
         return {"status": "error", "detail": str(e)}
 
