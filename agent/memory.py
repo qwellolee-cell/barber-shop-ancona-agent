@@ -151,33 +151,45 @@ async def cancella_appuntamento(appuntamento_id: int) -> bool:
         return True
 
 
-async def slot_disponibili(data: date, durata_minuti: int) -> list[str]:
+async def slot_disponibili(
+    data: date,
+    durata_minuti: int,
+    tenant_config=None,
+) -> list[str]:
     """
-    Slot liberi in una data con granularità 15 min.
-    Importa ORARIO_NEGOCIO e GIORNI_CHIUSI da agent/calendar.py
-    per rispettare il calendario del negozio.
+    Slot liberi in una data con granularità configurabile per tenant.
+    Legge gli orari e la granularità dalla TenantConfig (se fornita)
+    oppure dalla config del tenant default.
     Ritorna lista di stringhe "HH:MM".
-    """
-    # Import qui per evitare dipendenza circolare (calendar.py importa da memory.py)
-    from agent.calendar import ORARIO_NEGOCIO, GIORNI_CHIUSI
 
-    # Controlla giorno chiuso
-    nome_giorno = data.strftime("%A").lower()  # monday, tuesday, ...
-    nomi_it = {
-        "monday": "lunedi", "tuesday": "martedi", "wednesday": "mercoledi",
-        "thursday": "giovedi", "friday": "venerdi", "saturday": "sabato",
-        "sunday": "domenica",
-    }
-    if nomi_it.get(nome_giorno) in GIORNI_CHIUSI:
+    Args:
+        data: data per cui calcolare gli slot
+        durata_minuti: durata del servizio richiesto
+        tenant_config: TenantConfig del tenant corrente (opzionale,
+                       usa il tenant default se None)
+    """
+    # Carica la config del tenant (lazy import per evitare circolarità)
+    if tenant_config is None:
+        from agent.tenant_loader import carica_tenant_default
+        tenant_config = carica_tenant_default()
+
+    # Giorno ISO: 0=lunedì … 6=domenica (compatibile con Python weekday())
+    giorno_iso = data.weekday()
+
+    if tenant_config.is_giorno_chiuso(giorno_iso):
         return []
 
     appuntamenti_giorno = await get_appuntamenti_giorno(data)
 
+    granularita = tenant_config.slot_granularity_min
     liberi = []
-    for apertura, chiusura in ORARIO_NEGOCIO:
+
+    for turno in tenant_config.turni_apertura(giorno_iso):
         # Genera slot da apertura a (chiusura - durata)
-        slot = datetime(data.year, data.month, data.day, apertura[0], apertura[1])
-        limite = datetime(data.year, data.month, data.day, chiusura[0], chiusura[1])
+        slot = datetime(data.year, data.month, data.day,
+                        turno.apertura.hour, turno.apertura.minute)
+        limite = datetime(data.year, data.month, data.day,
+                          turno.chiusura.hour, turno.chiusura.minute)
         limite -= timedelta(minutes=durata_minuti)
 
         while slot <= limite:
@@ -189,15 +201,33 @@ async def slot_disponibili(data: date, durata_minuti: int) -> list[str]:
             )
             if not occupato:
                 liberi.append(slot.strftime("%H:%M"))
-            slot += timedelta(minutes=15)
+            slot += timedelta(minutes=granularita)
 
     return liberi
 
 
-async def get_appuntamenti_promemoria() -> list[Appuntamento]:
-    """Appuntamenti confermati nelle prossime 24h con reminder non ancora inviato."""
+async def get_appuntamenti_promemoria(
+    finestra_ore: int = None,
+) -> list[Appuntamento]:
+    """
+    Appuntamenti confermati nella finestra di tempo indicata
+    con reminder non ancora inviato.
+
+    Args:
+        finestra_ore: ore da ora entro cui cercare gli appuntamenti.
+                      Se None, legge dal tenant default (backward compat).
+    """
+    if finestra_ore is None:
+        try:
+            from agent.tenant_loader import carica_tenant_default
+            config = carica_tenant_default()
+            # Usa la finestra più grande tra quelle configurate
+            finestra_ore = max(config.reminder_finestre_ore) if config.reminder_finestre_ore else 24
+        except Exception:
+            finestra_ore = 24  # fallback sicuro
+
     ora = datetime.utcnow()
-    tra_24h = ora + timedelta(hours=24)
+    limite = ora + timedelta(hours=finestra_ore)
     async with async_session() as session:
         result = await session.execute(
             select(Appuntamento).where(
@@ -205,7 +235,7 @@ async def get_appuntamenti_promemoria() -> list[Appuntamento]:
                     Appuntamento.stato == "confermato",
                     Appuntamento.reminder_inviato == False,  # noqa: E712
                     Appuntamento.data_ora >= ora,
-                    Appuntamento.data_ora <= tra_24h,
+                    Appuntamento.data_ora <= limite,
                 )
             )
         )

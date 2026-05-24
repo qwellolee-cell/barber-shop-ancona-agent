@@ -1,0 +1,76 @@
+# tenants/barber-shop-ancona/settings.yaml
+# Configurazione specifica del tenant Barber Shop Ancona
+# Sovrascrive i valori di default del template "barbiere"
+# Cleek — tenant ID: barber-shop-ancona
+
+tenant:
+  slug: barber-shop-ancona
+  nome: "Barber Shop Ancona"
+  business_type: barbiere
+  lingua: it
+
+agente:
+  nome: "Simone"
+  tono: "persuasivo e commerciale"
+  emoji_firma: "✂️"
+
+# Orari specifici di questo barbiere
+# Martedì-Sabato 9-13 e 15-19; Lunedì e Domenica chiusi
+orari:
+  - giorno: 0      # lunedì
+    aperto: false
+  - giorno: 1      # martedì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "15:00"
+        chiusura: "19:00"
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "15:00"
+        chiusura: "19:00"
+  - giorno: 3      # giovedì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "15:00"
+        chiusura: "19:00"
+  - giorno: 4      # venerdì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "15:00"
+        chiusura: "19:00"
+  - giorno: 5      # sabato
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "15:00"
+        chiusura: "19:00"
+  - giorno: 6      # domenica
+    aperto: false
+
+scheduling:
+  slot_granularity_min: 15           # slot ogni 15 minuti
+
+reminder:
+  finestre_ore: [24]                 # reminder 24h prima
+  messaggio_template: |
+    Ciao {nome_cliente}! 👋
+    Ti ricordiamo il tuo appuntamento di domani alle *{ora}*
+    per *{servizio}* da {nome_business}.
+    Scrivi *ANNULLA* entro stasera se non puoi venire.
+    A presto! {emoji_firma}
+
+risorse:
+  - nome: "Sedia 1"
+    tipo: sedia
+    capienza: 1
+    attiva: true

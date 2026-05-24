@@ -1,0 +1,69 @@
+# business-types/estetista.yaml — Template per centri estetici e beauty salon
+# Cleek — eredita da _base.yaml
+
+tipo: estetista
+nome: "Centro Estetico / Beauty Salon"
+
+scheduling:
+  slot_mode: grid
+  slot_granularity_min: 15
+  buffer_post_min: 5                 # 5 min tra trattamenti
+  max_party_size: 1
+  durata_tipo: fixed
+
+risorse:
+  tipo_default: cabina
+  risorse_per_appuntamento: 1
+  assegnazione: auto
+
+orari_default:
+  - giorno: 0      # lunedì
+    aperto: false
+  - giorno: 1      # martedì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-19:00"]
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-19:00"]
+  - giorno: 3      # giovedì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-19:00"]
+  - giorno: 4      # venerdì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-19:00"]
+  - giorno: 5      # sabato
+    aperto: true
+    turni: ["09:00-13:00", "14:30-17:00"]
+  - giorno: 6      # domenica
+    aperto: false
+
+reminder:
+  finestre_ore: [24]
+  messaggio_template: |
+    Ciao {nome_cliente}! 💆
+    Ti ricordiamo il tuo appuntamento di domani alle *{ora}*
+    per *{servizio}* presso {nome_business}.
+    Scrivi *ANNULLA* se non puoi venire.
+    A presto! ✨
+
+servizi_default:
+  - nome: "Pulizia Viso"
+    durata_minuti: 60
+    categoria: viso
+  - nome: "Ceretta Gambe Intere"
+    durata_minuti: 45
+    categoria: ceretta
+  - nome: "Massaggio Rilassante"
+    durata_minuti: 60
+    categoria: massaggi
+  - nome: "Manicure"
+    durata_minuti: 45
+    categoria: mani_piedi
+  - nome: "Pedicure"
+    durata_minuti: 50
+    categoria: mani_piedi
+
+terminologia:
+  cliente: cliente
+  appuntamento: appuntamento
+  servizio: trattamento

@@ -1,0 +1,65 @@
+# business-types/dentista.yaml — Template per studi dentistici
+# Cleek — eredita da _base.yaml
+
+tipo: dentista
+nome: "Studio Dentistico"
+
+scheduling:
+  slot_mode: grid
+  slot_granularity_min: 15
+  buffer_post_min: 15                # 15 min di sanificazione tra pazienti
+  max_party_size: 1
+  durata_tipo: variable              # le visite hanno durata variabile
+
+risorse:
+  tipo_default: studio
+  risorse_per_appuntamento: 1
+  assegnazione: auto
+
+orari_default:
+  - giorno: 0      # lunedì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-18:30"]
+  - giorno: 1      # martedì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-18:30"]
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-18:30"]
+  - giorno: 3      # giovedì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-18:30"]
+  - giorno: 4      # venerdì
+    aperto: true
+    turni: ["09:00-13:00", "14:30-18:30"]
+  - giorno: 5      # sabato
+    aperto: false
+  - giorno: 6      # domenica
+    aperto: false
+
+reminder:
+  finestre_ore: [48, 2]             # reminder a 48h E a 2h prima della visita
+  messaggio_template: |
+    Gentile {nome_cliente},
+    Le ricordiamo l'appuntamento del {data} alle *{ora}*
+    per *{servizio}* presso {nome_business}.
+    Per spostare o cancellare risponda a questo messaggio.
+
+servizi_default:
+  - nome: "Visita di Controllo"
+    durata_minuti: 30
+    categoria: visite
+  - nome: "Igiene Dentale"
+    durata_minuti: 45
+    categoria: igiene
+  - nome: "Otturazione"
+    durata_minuti: 60
+    categoria: cure
+  - nome: "Estrazione"
+    durata_minuti: 45
+    categoria: chirurgia
+
+terminologia:
+  cliente: paziente
+  appuntamento: visita
+  servizio: prestazione

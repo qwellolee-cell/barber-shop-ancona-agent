@@ -1,0 +1,29 @@
+# business-types/_base.yaml — Valori di default condivisi da tutti i tipi di business
+# Cleek — ogni business-type specifico eredita e sovrascrive questi valori
+
+scheduling:
+  slot_mode: grid                    # "grid" = slot a griglia, "fixed" = orari fissi
+  slot_granularity_min: 30           # granularità griglia in minuti
+  buffer_post_min: 0                 # buffer di pulizia tra appuntamenti
+  max_party_size: 1                  # numero massimo di persone per prenotazione
+  durata_tipo: fixed                 # "fixed" = durata fissa, "variable" = range
+
+risorse:
+  tipo_default: posto
+  risorse_per_appuntamento: 1
+  assegnazione: auto                 # "auto" = prima risorsa libera, "manual" = cliente sceglie
+
+reminder:
+  finestre_ore: [24]                 # ore prima dell'appuntamento in cui inviare il reminder
+  messaggio_template: |
+    Ciao {nome_cliente}! 👋
+    Ti ricordiamo il tuo appuntamento domani alle *{ora}*
+    per *{servizio}* da {nome_business}.
+    Scrivi *ANNULLA* entro stasera se non puoi venire.
+
+terminologia:
+  cliente: cliente
+  appuntamento: appuntamento
+  servizio: servizio
+
+lingua: it

@@ -1,0 +1,82 @@
+# business-types/barbiere.yaml — Template per barber shop / barberie
+# Cleek — eredita da _base.yaml
+
+tipo: barbiere
+nome: "Barbiere / Barber Shop"
+
+scheduling:
+  slot_mode: grid
+  slot_granularity_min: 15           # granularità 15 minuti (tipica delle barberie)
+  buffer_post_min: 0
+  max_party_size: 1
+  durata_tipo: fixed
+
+risorse:
+  tipo_default: sedia
+  risorse_per_appuntamento: 1
+  assegnazione: auto
+
+orari_default:
+  # ISO: 0=lunedì ... 6=domenica
+  - giorno: 0      # lunedì
+    aperto: false
+  - giorno: 1      # martedì
+    aperto: true
+    turni: ["09:00-13:00", "15:00-19:00"]
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni: ["09:00-13:00", "15:00-19:00"]
+  - giorno: 3      # giovedì
+    aperto: true
+    turni: ["09:00-13:00", "15:00-19:00"]
+  - giorno: 4      # venerdì
+    aperto: true
+    turni: ["09:00-13:00", "15:00-19:00"]
+  - giorno: 5      # sabato
+    aperto: true
+    turni: ["09:00-13:00", "15:00-19:00"]
+  - giorno: 6      # domenica
+    aperto: false
+
+reminder:
+  finestre_ore: [24]
+  messaggio_template: |
+    Ciao {nome_cliente}! 👋
+    Ti ricordiamo il tuo appuntamento di domani alle *{ora}*
+    per *{servizio}* da {nome_business}.
+    Scrivi *ANNULLA* entro stasera se non puoi venire.
+    A presto! ✂️
+
+servizi_default:
+  - nome: "Taglio Uomo"
+    durata_minuti: 30
+    categoria: taglio
+  - nome: "Taglio Uomo con Shampoo"
+    durata_minuti: 35
+    categoria: taglio
+  - nome: "Taglio Bambino"
+    durata_minuti: 20
+    categoria: taglio
+  - nome: "Sfumatura e Dettagli"
+    durata_minuti: 15
+    categoria: taglio
+  - nome: "Sistemazione Barba"
+    durata_minuti: 20
+    categoria: barba
+  - nome: "Taglio e Design Barba"
+    durata_minuti: 30
+    categoria: barba
+  - nome: "Trattamento Barba Deluxe"
+    durata_minuti: 40
+    categoria: barba
+  - nome: "Rituale di Rasatura Classico"
+    durata_minuti: 30
+    categoria: pacchetti
+  - nome: "Taglio + Barba Experience"
+    durata_minuti: 60
+    categoria: pacchetti
+
+terminologia:
+  cliente: cliente
+  appuntamento: appuntamento
+  servizio: servizio

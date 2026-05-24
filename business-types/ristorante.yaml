@@ -1,0 +1,58 @@
+# business-types/ristorante.yaml — Template per ristoranti e trattorie
+# Cleek — eredita da _base.yaml
+
+tipo: ristorante
+nome: "Ristorante / Trattoria"
+
+scheduling:
+  slot_mode: fixed                   # orari fissi per turno, non griglia libera
+  orari_fissi:
+    pranzo: ["12:00", "12:30", "13:00", "13:30", "14:00"]
+    cena:   ["19:00", "19:30", "20:00", "20:30", "21:00", "21:30"]
+  slot_granularity_min: 30           # usato come fallback se slot_mode=grid
+  buffer_post_min: 0
+  max_party_size: 20
+  durata_tipo: fixed
+  durata_default_minuti: 90          # occupazione tavolo standard
+
+risorse:
+  tipo_default: tavolo
+  risorse_per_appuntamento: 1
+  assegnazione: auto                 # cerca tavolo con capienza >= party_size
+
+orari_default:
+  - giorno: 0      # lunedì
+    aperto: false
+  - giorno: 1      # martedì
+    aperto: true
+    turni: ["12:00-15:00", "19:00-23:00"]
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni: ["12:00-15:00", "19:00-23:00"]
+  - giorno: 3      # giovedì
+    aperto: true
+    turni: ["12:00-15:00", "19:00-23:00"]
+  - giorno: 4      # venerdì
+    aperto: true
+    turni: ["12:00-15:00", "19:00-23:00"]
+  - giorno: 5      # sabato
+    aperto: true
+    turni: ["12:00-15:00", "19:00-23:00"]
+  - giorno: 6      # domenica
+    aperto: true
+    turni: ["12:00-15:00", "19:00-23:00"]
+
+reminder:
+  finestre_ore: [2]
+  messaggio_template: |
+    Ciao {nome_cliente}! 🍽️
+    Ricorda che tra circa 2 ore hai un tavolo prenotato
+    alle *{ora}* per *{num_persone} persone* da {nome_business}.
+    Per cancellare scrivi ANNULLA o chiama il locale.
+
+servizi_default: []                  # i ristoranti non hanno catalogo servizi
+
+terminologia:
+  cliente: ospite
+  appuntamento: prenotazione
+  servizio: coperti
