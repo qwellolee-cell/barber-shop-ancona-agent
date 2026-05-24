@@ -1,20 +1,25 @@
-# agent/memory.py — ORM models + query layer multi-tenant
-# Cleek — Fase 2
+# agent/memory.py — ORM models + query layer multi-tenant con risorse
+# Cleek — Fase 3
 
 """
-Layer dati dell'applicazione. Tutte le query sono scoped per tenant_id,
-garantendo isolamento completo tra tenant diversi.
+Layer dati di Cleek. Tutte le query sono scoped per tenant_id.
 
-Compatibilità backward: tutte le funzioni accettano tenant_id con default=1
-(barber-shop-ancona), così il codice esistente continua a funzionare
-senza modifiche immediate.
+Novità Fase 3:
+- Modello Risorsa (sedia/tavolo/cabina/studio)
+- Appuntamento arricchito: risorsa_id, num_persone, buffer_minuti
+- slot_disponibili() usa conflict check per-risorsa
+- prenota_appuntamento() auto-assegna la risorsa con capienza minima adeguata
+- seed_risorse_da_settings() legge le risorse da tenants/{slug}/settings.yaml
 
-Migrazione automatica: inicializar_db() aggiunge tenant_id alle tabelle
-esistenti se non presente (via ALTER TABLE con try/except).
+Compatibilità backward:
+- Tutte le funzioni hanno default tenant_id=1 e num_persone=1
+- Se il tenant non ha risorse configurate → fallback a conflict check globale
+- Appuntamenti legacy (risorsa_id NULL) bloccano tutte le risorse (comportamento sicuro)
 """
 
 import os
 import logging
+import yaml
 from datetime import datetime, date, timedelta
 from typing import Optional
 
@@ -39,7 +44,7 @@ class Base(DeclarativeBase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# NUOVO: Tabella Tenant — registro di tutti i business su Cleek
+# Tenant
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Tenant(Base):
@@ -50,16 +55,38 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     nome: Mapped[str] = mapped_column(String(100), nullable=False)
     business_type: Mapped[str] = mapped_column(String(50), default="barbiere")
-    # Numero WhatsApp del business (es. "+39...@c.us") — usato per routing
     whatsapp_numero: Mapped[Optional[str]] = mapped_column(String(60), unique=True, nullable=True)
-    # Path al file settings.yaml (es. "tenants/barber-shop-ancona/settings.yaml")
     config_path: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Tabelle principali — aggiunto tenant_id (nullable per compat backward)
+# Risorsa — NUOVO Fase 3
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Risorsa(Base):
+    """
+    Risorsa fisica prenotabile: sedia (barbiere), tavolo (ristorante),
+    cabina (estetista), studio (dentista).
+
+    Capienza: quante persone può accogliere contemporaneamente.
+    Per barbieri/estetisti/dentisti = 1.
+    Per ristoranti = N (es. tavolo da 4).
+    """
+    __tablename__ = "risorse"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(50), default="generico")  # sedia/tavolo/cabina/studio
+    capienza: Mapped[int] = mapped_column(Integer, default=1)
+    attiva: Mapped[bool] = mapped_column(Boolean, default=True)
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Conversazioni
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Mensaje(Base):
@@ -67,7 +94,6 @@ class Mensaje(Base):
     __tablename__ = "mensajes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # Fase 2: tenant_id — nullable per compat backward (backfill avviene in inicializar_db)
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     telefono: Mapped[str] = mapped_column(String(50), index=True)
     role: Mapped[str] = mapped_column(String(20))
@@ -75,18 +101,32 @@ class Mensaje(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Prenotazioni — arricchito in Fase 3
+# ─────────────────────────────────────────────────────────────────────────────
+
 class Appuntamento(Base):
-    """Prenotazione di un cliente, scoped per tenant."""
+    """
+    Prenotazione di un cliente, scoped per tenant.
+
+    Fase 3: aggiunto risorsa_id (quale sedia/tavolo è occupato),
+    num_persone (coperti per ristorante), buffer_minuti (dentisti).
+    """
     __tablename__ = "appuntamenti"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # Fase 2: tenant_id — nullable per compat backward
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # Fase 3: risorsa assegnata (nullable per compat backward)
+    risorsa_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     telefono: Mapped[str] = mapped_column(String(50), index=True)
     nome_cliente: Mapped[str] = mapped_column(String(100))
     servizio: Mapped[str] = mapped_column(String(100))
     data_ora: Mapped[datetime] = mapped_column(DateTime, index=True)
     durata_minuti: Mapped[int] = mapped_column(Integer)
+    # Fase 3: numero persone (default 1; per ristoranti indica i coperti)
+    num_persone: Mapped[int] = mapped_column(Integer, default=1)
+    # Fase 3: minuti di buffer post-appuntamento (es. 15 per dentisti)
+    buffer_minuti: Mapped[int] = mapped_column(Integer, default=0)
     stato: Mapped[str] = mapped_column(String(20), default="confermato")
     reminder_inviato: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -98,36 +138,40 @@ class Appuntamento(Base):
 
 async def inicializar_db():
     """
-    Crea tutte le tabelle (nuove) e aggiunge tenant_id alle tabelle
-    esistenti se non già presente.
-    Seed: inserisce il record per barber-shop-ancona (id=1) se assente.
+    Crea tutte le tabelle (se non esistono) e migra quelle esistenti.
+    Esegue il seed di tenant default e relative risorse.
     """
-    # Crea le tabelle che non esistono ancora (inclusa tenants)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Fase 2: aggiungi tenant_id alle tabelle esistenti create in Fase 1
-    # ALTER TABLE è idempotente grazie al try/except
+    # Migrazione colonne Fase 2 (tenant_id) e Fase 3 (risorsa_id, num_persone, buffer)
     async with engine.begin() as conn:
         for sql in [
             "ALTER TABLE appuntamenti ADD COLUMN tenant_id INTEGER",
             "ALTER TABLE mensajes ADD COLUMN tenant_id INTEGER",
+            "ALTER TABLE appuntamenti ADD COLUMN risorsa_id INTEGER",
+            "ALTER TABLE appuntamenti ADD COLUMN num_persone INTEGER DEFAULT 1",
+            "ALTER TABLE appuntamenti ADD COLUMN buffer_minuti INTEGER DEFAULT 0",
         ]:
             try:
                 await conn.execute(text(sql))
                 logger.info(f"Migrazione: {sql}")
             except Exception:
-                pass  # Colonna già esistente — OK
+                pass  # Colonna già esistente
 
-        # Backfill: assegna tutti i record privi di tenant_id al tenant 1
+        # Backfill tenant_id su record orfani
         for sql in [
             "UPDATE appuntamenti SET tenant_id = 1 WHERE tenant_id IS NULL",
             "UPDATE mensajes SET tenant_id = 1 WHERE tenant_id IS NULL",
+            "UPDATE appuntamenti SET num_persone = 1 WHERE num_persone IS NULL",
+            "UPDATE appuntamenti SET buffer_minuti = 0 WHERE buffer_minuti IS NULL",
         ]:
             await conn.execute(text(sql))
 
-    # Seed: inserisce barber-shop-ancona come primo tenant se non esiste
+    # Seed tenant default
     await _seed_tenant_default()
+    # Seed risorse del tenant default
+    await seed_risorse_da_settings("barber-shop-ancona", tenant_id=1)
 
 
 async def _seed_tenant_default():
@@ -155,29 +199,18 @@ async def _seed_tenant_default():
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def get_tenant_by_slug(slug: str) -> Optional[Tenant]:
-    """Cerca un tenant per slug. Ritorna None se non trovato o non attivo."""
     async with async_session() as session:
         result = await session.execute(
-            select(Tenant).where(
-                and_(Tenant.slug == slug, Tenant.attivo == True)  # noqa: E712
-            )
+            select(Tenant).where(and_(Tenant.slug == slug, Tenant.attivo == True))  # noqa: E712
         )
         return result.scalars().first()
 
 
 async def get_tenant_by_whatsapp(numero: str) -> Optional[Tenant]:
-    """
-    Cerca il tenant associato a un numero WhatsApp.
-    Usato per il routing multi-tenant nel webhook.
-    Ritorna None se nessun tenant ha quel numero.
-    """
     async with async_session() as session:
         result = await session.execute(
             select(Tenant).where(
-                and_(
-                    Tenant.whatsapp_numero == numero,
-                    Tenant.attivo == True,  # noqa: E712
-                )
+                and_(Tenant.whatsapp_numero == numero, Tenant.attivo == True)  # noqa: E712
             )
         )
         return result.scalars().first()
@@ -190,11 +223,9 @@ async def crea_o_aggiorna_tenant(
     whatsapp_numero: Optional[str] = None,
     config_path: Optional[str] = None,
 ) -> Tenant:
-    """Crea un nuovo tenant o aggiorna uno esistente (upsert per slug)."""
+    """Crea o aggiorna un tenant (upsert per slug). Poi fa il seed delle risorse."""
     async with async_session() as session:
-        result = await session.execute(
-            select(Tenant).where(Tenant.slug == slug)
-        )
+        result = await session.execute(select(Tenant).where(Tenant.slug == slug))
         tenant = result.scalars().first()
         if tenant is None:
             tenant = Tenant(
@@ -216,11 +247,139 @@ async def crea_o_aggiorna_tenant(
                 tenant.config_path = config_path
         await session.commit()
         await session.refresh(tenant)
-        return tenant
+
+    # Seed risorse dal settings.yaml se disponibile
+    await seed_risorse_da_settings(slug, tenant_id=tenant.id)
+    return tenant
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Prenotazioni — tutte le funzioni filtrano per tenant_id
+# Gestione Risorse — Fase 3
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def seed_risorse_da_settings(slug: str, tenant_id: int) -> None:
+    """
+    Legge la sezione 'risorse' da tenants/{slug}/settings.yaml e crea
+    i record Risorsa nel DB se non esistono già per questo tenant.
+    Operazione idempotente: non duplica risorse già presenti.
+    """
+    settings_path = f"tenants/{slug}/settings.yaml"
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return  # nessun settings.yaml, skip silenzioso
+
+    risorse_yaml = data.get("risorse", [])
+    if not risorse_yaml:
+        return
+
+    async with async_session() as session:
+        # Controlla quante risorse esistono già per questo tenant
+        result = await session.execute(
+            select(Risorsa).where(Risorsa.tenant_id == tenant_id)
+        )
+        existing = result.scalars().all()
+        nomi_esistenti = {r.nome for r in existing}
+
+        nuove = 0
+        for i, r_data in enumerate(risorse_yaml):
+            nome = r_data.get("nome", f"Risorsa {i+1}")
+            if nome in nomi_esistenti:
+                continue
+            session.add(Risorsa(
+                tenant_id=tenant_id,
+                nome=nome,
+                tipo=r_data.get("tipo", "generico"),
+                capienza=r_data.get("capienza", 1),
+                attiva=r_data.get("attivo", True),
+                ordine=i,
+            ))
+            nuove += 1
+
+        if nuove:
+            await session.commit()
+            logger.info(f"Seed risorse [{slug}]: {nuove} risorse create")
+
+
+async def get_risorse_attive(
+    tenant_id: int,
+    min_capienza: int = 1,
+) -> list[Risorsa]:
+    """
+    Restituisce le risorse attive del tenant con capienza >= min_capienza,
+    ordinate per capienza crescente (minima capienza sufficiente prima).
+    Questo approccio massimizza la disponibilità delle risorse grandi.
+    """
+    async with async_session() as session:
+        result = await session.execute(
+            select(Risorsa)
+            .where(
+                and_(
+                    Risorsa.tenant_id == tenant_id,
+                    Risorsa.attiva == True,  # noqa: E712
+                    Risorsa.capienza >= min_capienza,
+                )
+            )
+            .order_by(Risorsa.capienza, Risorsa.ordine)
+        )
+        return list(result.scalars().all())
+
+
+async def _trova_risorsa_libera(
+    session: AsyncSession,
+    tenant_id: int,
+    data_ora: datetime,
+    fine: datetime,
+    risorse: list[Risorsa],
+    buffer_minuti: int = 0,
+) -> Optional[Risorsa]:
+    """
+    Cerca la prima risorsa libera nel periodo [data_ora, fine + buffer].
+    Priorità: risorsa con capienza minima adeguata (efficienza massima).
+
+    Regole di conflitto:
+    - Appuntamento con risorsa_id → conflitto solo se stessa risorsa
+    - Appuntamento senza risorsa_id (legacy) → blocca TUTTE le risorse (sicuro)
+    """
+    fine_con_buffer = fine + timedelta(minutes=buffer_minuti)
+
+    # Carica tutti gli appuntamenti confermati che si sovrappongono al periodo
+    result = await session.execute(
+        select(Appuntamento).where(
+            and_(
+                Appuntamento.tenant_id == tenant_id,
+                Appuntamento.stato == "confermato",
+                Appuntamento.data_ora < fine_con_buffer,
+            )
+        )
+    )
+    candidati = result.scalars().all()
+
+    # Filtra quelli che si sovrappongono davvero
+    conflitti = []
+    for apt in candidati:
+        apt_fine = apt.data_ora + timedelta(minutes=apt.durata_minuti + (apt.buffer_minuti or 0))
+        if apt.data_ora < fine_con_buffer and apt_fine > data_ora:
+            conflitti.append(apt)
+
+    # Appuntamenti senza risorsa_id bloccano tutte le risorse
+    ha_conflitti_globali = any(apt.risorsa_id is None for apt in conflitti)
+    if ha_conflitti_globali:
+        return None
+
+    # Per ogni risorsa: verifica che nessun conflitto la blocchi
+    risorsa_id_occupati = {apt.risorsa_id for apt in conflitti if apt.risorsa_id is not None}
+
+    for risorsa in risorse:
+        if risorsa.id not in risorsa_id_occupati:
+            return risorsa
+
+    return None  # tutte le risorse occupate
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prenotazioni
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def prenota_appuntamento(
@@ -230,37 +389,66 @@ async def prenota_appuntamento(
     data_ora: datetime,
     durata_minuti: int,
     tenant_id: int = 1,
+    num_persone: int = 1,
+    buffer_minuti: int = 0,
 ) -> Optional[Appuntamento]:
     """
-    Crea un appuntamento solo se lo slot è libero per quel tenant.
-    Il conflict check è scoped per tenant_id: due tenant diversi
-    possono avere appuntamenti nello stesso slot senza interferenze.
-    Ritorna None se lo slot è occupato.
+    Crea un appuntamento se esiste almeno una risorsa libera.
+
+    Logica:
+    1. Cerca risorse attive con capienza >= num_persone
+    2. Se trovate: assegna la prima libera nel periodo richiesto
+    3. Se nessuna risorsa configurata: fallback a conflict check globale
+    4. Ritorna None se slot occupato (nessuna risorsa libera)
+
+    Args:
+        num_persone: coperti richiesti (default 1; per ristoranti)
+        buffer_minuti: minuti di sanificazione post-appuntamento (default 0; per dentisti)
     """
     fine = data_ora + timedelta(minutes=durata_minuti)
+
     async with async_session() as session:
-        overlap = await session.execute(
-            select(Appuntamento).where(
-                and_(
-                    Appuntamento.tenant_id == tenant_id,
-                    Appuntamento.stato == "confermato",
-                    Appuntamento.data_ora < fine,
+        risorse = await get_risorse_attive(tenant_id, min_capienza=num_persone)
+
+        risorsa_id: Optional[int] = None
+
+        if risorse:
+            # Modalità multi-risorsa: trova la prima risorsa libera
+            risorsa_scelta = await _trova_risorsa_libera(
+                session, tenant_id, data_ora, fine, risorse, buffer_minuti
+            )
+            if risorsa_scelta is None:
+                logger.info(f"[tenant={tenant_id}] Nessuna risorsa libera in {data_ora}")
+                return None
+            risorsa_id = risorsa_scelta.id
+            logger.info(f"[tenant={tenant_id}] Risorsa assegnata: {risorsa_scelta.nome} (cap={risorsa_scelta.capienza})")
+
+        else:
+            # Fallback globale (tenant senza risorse configurate)
+            result = await session.execute(
+                select(Appuntamento).where(
+                    and_(
+                        Appuntamento.tenant_id == tenant_id,
+                        Appuntamento.stato == "confermato",
+                        Appuntamento.data_ora < fine,
+                    )
                 )
             )
-        )
-        esistenti = overlap.scalars().all()
-        for apt in esistenti:
-            fine_esistente = apt.data_ora + timedelta(minutes=apt.durata_minuti)
-            if apt.data_ora < fine and fine_esistente > data_ora:
-                return None  # Slot occupato per questo tenant
+            for apt in result.scalars().all():
+                apt_fine = apt.data_ora + timedelta(minutes=apt.durata_minuti)
+                if apt.data_ora < fine and apt_fine > data_ora:
+                    return None
 
         nuovo = Appuntamento(
             tenant_id=tenant_id,
+            risorsa_id=risorsa_id,
             telefono=telefono,
             nome_cliente=nome,
             servizio=servizio,
             data_ora=data_ora,
             durata_minuti=durata_minuti,
+            num_persone=num_persone,
+            buffer_minuti=buffer_minuti,
             stato="confermato",
             reminder_inviato=False,
             created_at=datetime.utcnow(),
@@ -322,9 +510,8 @@ async def cancella_appuntamento(
     tenant_id: int = 1,
 ) -> bool:
     """
-    Soft delete di un appuntamento.
+    Soft delete scoped per tenant.
     Il filtro su tenant_id previene cancellazioni cross-tenant.
-    Ritorna False se l'appuntamento non esiste o non appartiene al tenant.
     """
     async with async_session() as session:
         result = await session.execute(
@@ -348,29 +535,32 @@ async def slot_disponibili(
     durata_minuti: int,
     tenant_config=None,
     tenant_id: int = 1,
+    num_persone: int = 1,
 ) -> list[str]:
     """
-    Slot liberi in una data con granularità configurabile per tenant.
-    Filtra gli appuntamenti esistenti per tenant_id per evitare
-    che un tenant veda la disponibilità influenzata da un altro.
+    Slot liberi in una data per un tenant.
+
+    Fase 3 — logica multi-risorsa:
+    - Se il tenant ha risorse configurate: uno slot è libero se almeno una
+      risorsa con capienza >= num_persone è disponibile in quel periodo.
+    - Se nessuna risorsa: fallback a conflict check globale (backward compat).
 
     Args:
-        data: data per cui calcolare gli slot
-        durata_minuti: durata del servizio richiesto
-        tenant_config: TenantConfig (opzionale, usa default se None)
-        tenant_id: id numerico del tenant (default=1 per backward compat)
+        num_persone: persone da ospitare (filtra risorse per capienza sufficiente)
     """
     if tenant_config is None:
         from agent.tenant_loader import carica_tenant_default
         tenant_config = carica_tenant_default()
 
-    giorno_iso = data.weekday()  # 0=lunedì … 6=domenica
+    giorno_iso = data.weekday()
 
     if tenant_config.is_giorno_chiuso(giorno_iso):
         return []
 
-    # Recupera solo gli appuntamenti di QUESTO tenant
-    appuntamenti_giorno = await get_appuntamenti_giorno(data, tenant_id=tenant_id)
+    # Carica risorse attive con capienza adeguata
+    risorse = await get_risorse_attive(tenant_id, min_capienza=num_persone)
+    # Carica tutti gli appuntamenti del giorno (per entrambe le logiche)
+    appuntamenti = await get_appuntamenti_giorno(data, tenant_id=tenant_id)
 
     granularita = tenant_config.slot_granularity_min
     liberi = []
@@ -384,29 +574,64 @@ async def slot_disponibili(
 
         while slot <= limite:
             fine_slot = slot + timedelta(minutes=durata_minuti)
-            occupato = any(
-                apt.data_ora < fine_slot
-                and apt.data_ora + timedelta(minutes=apt.durata_minuti) > slot
-                for apt in appuntamenti_giorno
-            )
-            if not occupato:
+
+            if risorse:
+                slot_libero = _slot_ha_risorsa_libera(
+                    slot, fine_slot, appuntamenti, risorse
+                )
+            else:
+                # Fallback globale
+                slot_libero = not any(
+                    apt.data_ora < fine_slot
+                    and apt.data_ora + timedelta(minutes=apt.durata_minuti) > slot
+                    for apt in appuntamenti
+                )
+
+            if slot_libero:
                 liberi.append(slot.strftime("%H:%M"))
             slot += timedelta(minutes=granularita)
 
     return liberi
 
 
+def _slot_ha_risorsa_libera(
+    slot_inizio: datetime,
+    slot_fine: datetime,
+    appuntamenti: list[Appuntamento],
+    risorse: list[Risorsa],
+) -> bool:
+    """
+    True se almeno una risorsa è libera nel periodo [slot_inizio, slot_fine].
+
+    Regole:
+    - Appuntamento con risorsa_id → conflitto solo su quella risorsa
+    - Appuntamento senza risorsa_id (legacy) → blocca tutte le risorse
+    """
+    # Calcola i conflitti che si sovrappongono allo slot
+    conflitti_nel_slot = []
+    for apt in appuntamenti:
+        apt_fine = apt.data_ora + timedelta(minutes=apt.durata_minuti + (apt.buffer_minuti or 0))
+        if apt.data_ora < slot_fine and apt_fine > slot_inizio:
+            conflitti_nel_slot.append(apt)
+
+    # Se c'è un appuntamento legacy (senza risorsa), blocca tutto
+    if any(apt.risorsa_id is None for apt in conflitti_nel_slot):
+        return False
+
+    # Set di risorsa_id occupati in questo slot
+    occupati = {apt.risorsa_id for apt in conflitti_nel_slot}
+
+    # Basta che una risorsa non sia occupata
+    return any(r.id not in occupati for r in risorse)
+
+
 async def get_appuntamenti_promemoria(
-    tenant_id: int = None,
-    finestra_ore: int = None,
+    tenant_id: Optional[int] = None,
+    finestra_ore: Optional[int] = None,
 ) -> list[Appuntamento]:
     """
     Appuntamenti confermati nella finestra di tempo indicata
-    con reminder non ancora inviato, filtrati per tenant.
-
-    Args:
-        tenant_id: id del tenant (None = tutti i tenant attivi)
-        finestra_ore: ore da ora entro cui cercare. Se None, usa config tenant.
+    con reminder non ancora inviato.
     """
     if finestra_ore is None:
         try:
@@ -436,7 +661,6 @@ async def get_appuntamenti_promemoria(
 
 
 async def segna_reminder_inviato(appuntamento_id: int) -> None:
-    """Imposta reminder_inviato=True per quell'appuntamento."""
     async with async_session() as session:
         result = await session.execute(
             select(Appuntamento).where(Appuntamento.id == appuntamento_id)
@@ -448,7 +672,7 @@ async def segna_reminder_inviato(appuntamento_id: int) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Messaggi / Conversazioni — scoped per tenant_id
+# Messaggi / Conversazioni
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def guardar_mensaje(
@@ -457,7 +681,6 @@ async def guardar_mensaje(
     content: str,
     tenant_id: int = 1,
 ):
-    """Salva un messaggio nella cronologia della conversazione."""
     async with async_session() as session:
         session.add(Mensaje(
             tenant_id=tenant_id,
@@ -474,20 +697,10 @@ async def obtener_historial(
     limite: int = 20,
     tenant_id: int = 1,
 ) -> list[dict]:
-    """
-    Recupera gli ultimi N messaggi della conversazione di un cliente,
-    scoped per tenant. Un cliente dello stesso numero su due tenant
-    diversi ha storie separate.
-    """
     async with async_session() as session:
         result = await session.execute(
             select(Mensaje)
-            .where(
-                and_(
-                    Mensaje.tenant_id == tenant_id,
-                    Mensaje.telefono == telefono,
-                )
-            )
+            .where(and_(Mensaje.tenant_id == tenant_id, Mensaje.telefono == telefono))
             .order_by(Mensaje.timestamp.desc())
             .limit(limite)
         )
@@ -500,14 +713,10 @@ async def limpiar_historial(
     telefono: str,
     tenant_id: int = 1,
 ):
-    """Cancella tutto lo storico conversazione di un cliente per il tenant."""
     async with async_session() as session:
         result = await session.execute(
             select(Mensaje).where(
-                and_(
-                    Mensaje.tenant_id == tenant_id,
-                    Mensaje.telefono == telefono,
-                )
+                and_(Mensaje.tenant_id == tenant_id, Mensaje.telefono == telefono)
             )
         )
         for msg in result.scalars().all():

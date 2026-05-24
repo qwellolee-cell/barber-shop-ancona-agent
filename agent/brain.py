@@ -1,5 +1,5 @@
 # agent/brain.py — Cervello del agente: Claude API + tool use multi-tenant
-# Cleek — Fase 2
+# Cleek — Fase 3
 
 """
 Integrazione con l'API di Anthropic Claude.
@@ -24,7 +24,7 @@ client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tool definitions — Claude sceglie quale chiamare
-# In Fase 3 saranno generati dinamicamente per tipo di business
+# Fase 3: aggiunto num_persone per ristoranti e business con group booking
 # ─────────────────────────────────────────────────────────────────────────────
 
 TOOLS = [
@@ -32,7 +32,8 @@ TOOLS = [
         "name": "controlla_disponibilita",
         "description": (
             "Controlla gli slot liberi per una data specifica. "
-            "Usalo prima di confermare una prenotazione per mostrare gli orari disponibili al cliente."
+            "Usalo prima di confermare una prenotazione. "
+            "Per ristoranti, specifica anche num_persone per trovare tavoli con capienza sufficiente."
         ),
         "input_schema": {
             "type": "object",
@@ -45,6 +46,13 @@ TOOLS = [
                     "type": "integer",
                     "description": "Durata del servizio in minuti",
                 },
+                "num_persone": {
+                    "type": "integer",
+                    "description": (
+                        "Numero di persone per la prenotazione (default: 1). "
+                        "Per ristoranti indica i coperti richiesti."
+                    ),
+                },
             },
             "required": ["data", "durata_minuti"],
         },
@@ -54,7 +62,8 @@ TOOLS = [
         "description": (
             "Prenota un appuntamento per il cliente. "
             "Chiama sempre controlla_disponibilita prima per verificare che lo slot sia libero. "
-            "Assicurati di avere nome_cliente, servizio, data e ora prima di chiamare questo tool."
+            "Assicurati di avere nome_cliente, servizio, data e ora prima di chiamare questo tool. "
+            "Per ristoranti includi num_persone (coperti richiesti)."
         ),
         "input_schema": {
             "type": "object",
@@ -65,7 +74,7 @@ TOOLS = [
                 },
                 "servizio": {
                     "type": "string",
-                    "description": "Nome del servizio (es. Sistemazione Barba, Taglio Uomo, Taglio + Barba Experience)",
+                    "description": "Nome del servizio o descrizione della prenotazione",
                 },
                 "data": {
                     "type": "string",
@@ -77,7 +86,14 @@ TOOLS = [
                 },
                 "durata_minuti": {
                     "type": "integer",
-                    "description": "Durata del servizio in minuti",
+                    "description": "Durata in minuti",
+                },
+                "num_persone": {
+                    "type": "integer",
+                    "description": (
+                        "Numero di persone (default: 1). "
+                        "Per ristoranti indica i coperti da riservare."
+                    ),
                 },
             },
             "required": ["nome_cliente", "servizio", "data", "ora", "durata_minuti"],
@@ -136,11 +152,13 @@ async def _esegui_tool(
             data = date.fromisoformat(params["data"])
         except ValueError:
             return {"errore": f"Formato data non valido: {params['data']}. Usa YYYY-MM-DD."}
+        num_persone = int(params.get("num_persone", 1))
         slots = await memory.slot_disponibili(
             data,
             params["durata_minuti"],
             tenant_config=tenant_config,
             tenant_id=tenant_id,
+            num_persone=num_persone,
         )
         return {"slots_disponibili": slots, "totale": len(slots)}
 
@@ -149,6 +167,7 @@ async def _esegui_tool(
             data_ora = datetime.strptime(f"{params['data']} {params['ora']}", "%Y-%m-%d %H:%M")
         except ValueError:
             return {"successo": False, "messaggio": "Formato data o ora non valido.", "appuntamento_id": None}
+        num_persone = int(params.get("num_persone", 1))
         apt = await memory.prenota_appuntamento(
             telefono=telefono,
             nome=params["nome_cliente"],
@@ -156,6 +175,7 @@ async def _esegui_tool(
             data_ora=data_ora,
             durata_minuti=params["durata_minuti"],
             tenant_id=tenant_id,
+            num_persone=num_persone,
         )
         if apt is None:
             return {

@@ -104,10 +104,12 @@ def _serializza_appuntamenti(appuntamenti) -> list[dict]:
         {
             "id": a.id,
             "tenant_id": a.tenant_id,
+            "risorsa_id": a.risorsa_id,
             "ora": a.data_ora.strftime("%H:%M"),
             "nome_cliente": a.nome_cliente,
             "servizio": a.servizio,
             "durata_minuti": a.durata_minuti,
+            "num_persone": getattr(a, "num_persone", 1),
             "telefono": a.telefono,
             "stato": a.stato,
         }
