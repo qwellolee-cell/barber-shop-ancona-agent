@@ -3,51 +3,132 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Barber Shop Ancona — Dashboard</title>
+<title>Cleek — Dashboard</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; min-height: 100vh; }
 
-/* ── LOGIN ─────────────────────────────────── */
-#screen-login {
-  display: flex; align-items: center; justify-content: center;
-  min-height: 100vh; padding: 24px;
-}
-#screen-calendar { display: none; max-width: 480px; margin: 0 auto; padding-bottom: 60px; }
+/* ── SCHERMI ──────────────────────────────────────────────── */
+.screen { display: none; }
+.screen.active { display: flex; }
+#screen-login    { align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+#screen-tenants  { flex-direction: column; min-height: 100vh; }
+#screen-calendar { flex-direction: column; max-width: 520px; margin: 0 auto; width: 100%; padding-bottom: 60px; }
 
+/* ── LOGIN ─────────────────────────────────────────────────── */
 .login-card {
-  background: white; border-radius: 16px; padding: 40px 32px;
-  width: 100%; max-width: 360px;
-  box-shadow: 0 4px 24px rgba(0,0,0,.08); text-align: center;
+  background: white; border-radius: 20px; padding: 44px 36px;
+  width: 100%; max-width: 380px;
+  box-shadow: 0 4px 32px rgba(0,0,0,.10); text-align: center;
 }
-.login-logo  { font-size: 3rem; margin-bottom: 8px; }
-.login-title { font-size: 1.25rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
-.login-sub   { font-size: .875rem; color: #6B7280; margin-bottom: 32px; }
+.cleek-logo  { font-size: 2.8rem; margin-bottom: 4px; }
+.cleek-brand { font-size: 1.6rem; font-weight: 800; color: #111827;
+               letter-spacing: -.02em; margin-bottom: 2px; }
+.cleek-tag   { font-size: .8rem; color: #9CA3AF; margin-bottom: 32px;
+               text-transform: uppercase; letter-spacing: .08em; }
 .login-label {
   display: block; text-align: left;
   font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: 6px;
 }
 .login-input {
   width: 100%; padding: 12px 16px;
-  border: 1.5px solid #D1D5DB; border-radius: 8px;
+  border: 1.5px solid #D1D5DB; border-radius: 10px;
   font-size: 1rem; outline: none; transition: border-color .15s;
 }
-.login-input:focus { border-color: #1F2937; }
+.login-input:focus { border-color: #6366F1; }
 .login-btn {
-  width: 100%; padding: 12px; margin-top: 16px;
-  background: #1F2937; color: white; border: none;
-  border-radius: 8px; font-size: 1rem; font-weight: 600;
+  width: 100%; padding: 13px; margin-top: 16px;
+  background: #6366F1; color: white; border: none;
+  border-radius: 10px; font-size: 1rem; font-weight: 700;
   cursor: pointer; transition: background .15s;
 }
-.login-btn:hover    { background: #374151; }
-.login-btn:disabled { background: #9CA3AF; cursor: not-allowed; }
+.login-btn:hover    { background: #4F46E5; }
+.login-btn:disabled { background: #A5B4FC; cursor: not-allowed; }
 .login-error { margin-top: 12px; color: #DC2626; font-size: .875rem; min-height: 20px; }
 
-/* ── HEADER CALENDARIO ──────────────────── */
+/* ── HEADER TENANT PICKER ─────────────────────────────────── */
+.tenant-header {
+  background: white; padding: 16px 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.tenant-header-title {
+  font-size: 1.1rem; font-weight: 700; color: #111827;
+}
+.tenant-header-brand {
+  font-size: .75rem; color: #9CA3AF; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+
+/* ── GRIGLIA TENANT ───────────────────────────────────────── */
+.tenant-body { padding: 20px; flex: 1; }
+.tenant-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.tenant-card {
+  background: white; border-radius: 14px; padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06); cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  border: 2px solid transparent; position: relative;
+}
+.tenant-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.10);
+  border-color: #E0E7FF;
+}
+.tenant-card-emoji { font-size: 2.2rem; margin-bottom: 8px; }
+.tenant-card-nome  { font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 3px; }
+.tenant-card-type  {
+  font-size: .75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; margin-bottom: 10px;
+}
+.tenant-card-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: .75rem; font-weight: 600;
+}
+/* Colori per business type */
+.bt-barbiere  { color: #1D4ED8; background: #DBEAFE; }
+.bt-ristorante{ color: #B45309; background: #FEF3C7; }
+.bt-estetista { color: #9D174D; background: #FCE7F3; }
+.bt-dentista  { color: #065F46; background: #D1FAE5; }
+.bt-default   { color: #374151; background: #F3F4F6; }
+
+.tenant-strip {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 4px; border-radius: 14px 14px 0 0;
+}
+.bt-barbiere-strip   { background: #3B82F6; }
+.bt-ristorante-strip { background: #F59E0B; }
+.bt-estetista-strip  { background: #EC4899; }
+.bt-dentista-strip   { background: #10B981; }
+.bt-default-strip    { background: #6B7280; }
+
+.tenant-empty {
+  text-align: center; padding: 56px 24px;
+  color: #6B7280; font-size: .9rem;
+}
+.tenant-empty .ico { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+
+/* ── HEADER CALENDARIO ──────────────────────────────────────── */
 .cal-header {
   background: white; padding: 14px 16px;
   position: sticky; top: 0; z-index: 10;
   box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.cal-back-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.back-btn {
+  background: none; border: none; cursor: pointer;
+  color: #6366F1; font-size: .85rem; font-weight: 600;
+  padding: 4px 0; display: flex; align-items: center; gap: 4px;
+}
+.back-btn:hover { color: #4F46E5; }
+.cal-tenant-name {
+  font-size: .95rem; font-weight: 700; color: #111827;
+  display: flex; align-items: center; gap: 6px;
 }
 .cal-nav {
   display: flex; align-items: center;
@@ -60,8 +141,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; m
   transition: background .15s; white-space: nowrap;
 }
 .nav-btn:hover        { background: #F9FAFB; }
-.nav-btn.primary      { background: #1F2937; color: white; border-color: #1F2937; }
-.nav-btn.primary:hover{ background: #374151; }
+.nav-btn.primary      { background: #6366F1; color: white; border-color: #6366F1; }
+.nav-btn.primary:hover{ background: #4F46E5; }
 .cal-date-label {
   font-size: .95rem; font-weight: 700; color: #111827;
   text-align: center; flex: 1; line-height: 1.3;
@@ -83,7 +164,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; m
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinning { display: inline-block; animation: spin .7s linear infinite; }
 
-/* ── BODY CALENDARIO ────────────────────── */
+/* ── BODY CALENDARIO ──────────────────────────────────────── */
 .cal-body    { padding: 16px; }
 .section-title {
   font-size: .7rem; font-weight: 700; color: #9CA3AF;
@@ -102,18 +183,19 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; m
 }
 .state-msg .ico { font-size: 2.2rem; display: block; margin-bottom: 10px; }
 
-/* ── CARD APPUNTAMENTO ──────────────────── */
+/* ── CARD APPUNTAMENTO ─────────────────────────────────────── */
 .apt-card {
-  border-left: 4px solid #6B7280; border-radius: 8px;
+  border-left: 4px solid #6B7280; border-radius: 10px;
   padding: 12px 14px; margin-bottom: 8px;
 }
 .card-top     { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
-.card-time    { font-size: 1.35rem; font-weight: 700; color: #111827; line-height: 1; }
+.card-time    { font-size: 1.3rem; font-weight: 700; color: #111827; line-height: 1; }
 .card-name    { font-size: 1rem; font-weight: 600; color: #1F2937; }
-.card-service { font-size: .85rem; color: #6B7280; margin-bottom: 4px; }
-.card-phone   { font-size: .8rem; color: #9CA3AF; }
+.card-service { font-size: .85rem; color: #6B7280; margin-bottom: 3px; }
+.card-meta    { font-size: .8rem; color: #9CA3AF; display: flex; gap: 10px; flex-wrap: wrap; }
+.card-meta-item { display: flex; align-items: center; gap: 3px; }
 
-/* ── BOTTONE CANCELLA ───────────────────── */
+/* ── BOTTONE CANCELLA ──────────────────────────────────────── */
 .card-header {
   display: flex; align-items: flex-start;
   justify-content: space-between; margin-bottom: 4px;
@@ -129,29 +211,30 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; m
 }
 .cancel-btn:hover { background: #FECACA; }
 
-/* ── FOOTER ─────────────────────────────── */
+/* ── FOOTER ──────────────────────────────────────────────── */
 .footer-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
   background: white; border-top: 1px solid #E5E7EB;
   padding: 10px; text-align: center;
+  display: flex; align-items: center; justify-content: center; gap: 16px;
 }
-.logout-btn {
+.footer-btn {
   background: none; border: none;
   color: #9CA3AF; font-size: .8rem;
   cursor: pointer; text-decoration: underline;
 }
-.logout-btn:hover { color: #DC2626; }
+.footer-btn:hover { color: #DC2626; }
 </style>
 </head>
 <body>
 
-<!-- ══ LOGIN ══════════════════════════════════════════════ -->
-<div id="screen-login">
+<!-- ══ SCHERMO 1: LOGIN ════════════════════════════════════════ -->
+<div id="screen-login" class="screen">
   <div class="login-card">
-    <div class="login-logo">✂️</div>
-    <div class="login-title">Barber Shop Ancona</div>
-    <div class="login-sub">Dashboard appuntamenti</div>
-    <label class="login-label" for="key-input">Chiave di accesso</label>
+    <div class="cleek-logo">✦</div>
+    <div class="cleek-brand">Cleek</div>
+    <div class="cleek-tag">WhatsApp Booking Agent</div>
+    <label class="login-label" for="key-input">Chiave di accesso admin</label>
     <input id="key-input" class="login-input" type="password"
            placeholder="Inserisci la chiave admin"
            onkeydown="if(event.key==='Enter') doLogin()">
@@ -160,10 +243,36 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; m
   </div>
 </div>
 
-<!-- ══ CALENDARIO ═════════════════════════════════════════ -->
-<div id="screen-calendar">
+<!-- ══ SCHERMO 2: SELEZIONE TENANT ═════════════════════════════ -->
+<div id="screen-tenants" class="screen">
+
+  <div class="tenant-header">
+    <div>
+      <div class="tenant-header-brand">Cleek</div>
+      <div class="tenant-header-title">Seleziona business</div>
+    </div>
+    <button class="footer-btn" style="color:#6366F1;text-decoration:none;font-size:.85rem;font-weight:600"
+            onclick="doLogout()">Esci</button>
+  </div>
+
+  <div class="tenant-body">
+    <div class="tenant-grid" id="tenant-grid">
+      <div class="tenant-empty">
+        <span class="ico">⏳</span>Caricamento tenant...
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ SCHERMO 3: CALENDARIO ════════════════════════════════════ -->
+<div id="screen-calendar" class="screen">
 
   <div class="cal-header">
+    <div class="cal-back-row">
+      <button class="back-btn" onclick="showTenants()">← Tutti i business</button>
+      <div class="cal-tenant-name" id="cal-tenant-label">—</div>
+    </div>
     <div class="cal-nav">
       <button class="nav-btn" onclick="navigate(-1)">← Ieri</button>
       <div class="cal-date-label" id="cal-date-label">—</div>
@@ -185,60 +294,77 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #F3F4F6; m
   </div>
 
   <div class="footer-bar">
-    <button class="logout-btn" onclick="doLogout()">Disconnetti</button>
+    <button class="footer-btn" onclick="showTenants()">← Business</button>
+    <button class="footer-btn" onclick="doLogout()">Disconnetti</button>
   </div>
 
 </div>
 
 <script>
-// ── Costanti ─────────────────────────────────────────────
+// ── Costanti ──────────────────────────────────────────────────
 const GIORNI = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
 const MESI   = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 
-let currentDate   = new Date();
-let refreshTimer  = null;
-let isLoading     = false;
+// Dati del tenant attivo
+let activeTenant   = null;   // { id, slug, nome, business_type }
+let currentDate    = new Date();
+let refreshTimer   = null;
+let isLoading      = false;
 
-// ── Avvio ─────────────────────────────────────────────────
+// ── Avvio ─────────────────────────────────────────────────────
 function init() {
-  if (localStorage.getItem('adminKey')) showCalendar();
+  if (localStorage.getItem('adminKey')) showTenants();
   else showLogin();
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
 function showLogin() {
   clearInterval(refreshTimer);
-  document.getElementById('screen-login').style.display    = 'flex';
-  document.getElementById('screen-calendar').style.display = 'none';
+  activeTenant = null;
+  showScreen('screen-login');
 }
 
-function showCalendar() {
-  document.getElementById('screen-login').style.display    = 'none';
-  document.getElementById('screen-calendar').style.display = 'block';
-  currentDate  = new Date();
+async function showTenants() {
+  clearInterval(refreshTimer);
+  showScreen('screen-tenants');
+  await loadTenants();
+}
+
+function showCalendar(tenant) {
+  activeTenant = tenant;
+
+  // Label con emoji e nome
+  const emoji = businessEmoji(tenant.business_type);
+  document.getElementById('cal-tenant-label').innerHTML =
+    '<span style="font-size:1.1rem">' + emoji + '</span> ' + escHtml(tenant.nome);
+
+  showScreen('screen-calendar');
+  currentDate = new Date();
   loadDay();
   refreshTimer = setInterval(loadDay, 60000);
 }
 
-// ── Login / Logout ────────────────────────────────────────
+// ── Login / Logout ─────────────────────────────────────────────
 async function doLogin() {
   const key = document.getElementById('key-input').value.trim();
   const btn = document.getElementById('login-btn');
   const err = document.getElementById('login-error');
-
   if (!key) { err.textContent = 'Inserisci la chiave.'; return; }
 
-  btn.disabled     = true;
-  btn.textContent  = 'Verifica...';
-  err.textContent  = '';
+  btn.disabled    = true;
+  btn.textContent = 'Verifica...';
+  err.textContent = '';
 
   try {
-    const res = await fetch('/admin/appuntamenti?data=' + toISODate(new Date()), {
-      headers: { 'X-Admin-Key': key }
-    });
+    const res = await fetch('/tenants', { headers: { 'X-Admin-Key': key } });
     if (res.ok) {
       localStorage.setItem('adminKey', key);
-      showCalendar();
+      showTenants();
     } else if (res.status === 401) {
       err.textContent = 'Chiave non valida.';
     } else {
@@ -254,12 +380,55 @@ async function doLogin() {
 
 function doLogout() {
   localStorage.removeItem('adminKey');
-  document.getElementById('key-input').value  = '';
+  document.getElementById('key-input').value = '';
   document.getElementById('login-error').textContent = '';
   showLogin();
 }
 
-// ── Navigazione ───────────────────────────────────────────
+// ── Caricamento tenant ────────────────────────────────────────
+async function loadTenants() {
+  const grid = document.getElementById('tenant-grid');
+  grid.innerHTML = '<div class="tenant-empty"><span class="ico">⏳</span>Caricamento...</div>';
+
+  const key = localStorage.getItem('adminKey');
+  try {
+    const res = await fetch('/tenants', { headers: { 'X-Admin-Key': key } });
+    if (res.status === 401) { doLogout(); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const data = await res.json();
+    renderTenants(data.tenants || []);
+  } catch {
+    grid.innerHTML = '<div class="tenant-empty"><span class="ico">⚠️</span>Errore caricamento tenant.</div>';
+  }
+}
+
+function renderTenants(tenants) {
+  const grid = document.getElementById('tenant-grid');
+  if (!tenants.length) {
+    grid.innerHTML = '<div class="tenant-empty"><span class="ico">🏪</span>Nessun tenant attivo.</div>';
+    return;
+  }
+  grid.innerHTML = tenants.map(t => tenantCardHtml(t)).join('');
+}
+
+function tenantCardHtml(t) {
+  const bt    = businessTypeKey(t.business_type);
+  const emoji = businessEmoji(t.business_type);
+  const label = businessLabel(t.business_type);
+  return (
+    '<div class="tenant-card" onclick="showCalendar(' + JSON.stringify(t).replace(/"/g,'&quot;') + ')">' +
+      '<div class="tenant-strip ' + bt + '-strip"></div>' +
+      '<div class="tenant-card-emoji">' + emoji + '</div>' +
+      '<div class="tenant-card-nome">' + escHtml(t.nome) + '</div>' +
+      '<div class="tenant-card-type">' +
+        '<span class="tenant-card-badge ' + bt + '">' + label + '</span>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+// ── Navigazione calendario ─────────────────────────────────────
 function navigate(delta) {
   const d = new Date(currentDate);
   d.setDate(d.getDate() + delta);
@@ -272,9 +441,9 @@ function goToday() {
   loadDay();
 }
 
-// ── Caricamento dati ──────────────────────────────────────
+// ── Caricamento appuntamenti ───────────────────────────────────
 async function loadDay() {
-  if (isLoading) return;
+  if (isLoading || !activeTenant) return;
   isLoading = true;
 
   const spinEl = document.getElementById('spin-icon');
@@ -283,17 +452,17 @@ async function loadDay() {
 
   const key     = localStorage.getItem('adminKey');
   const dateStr = toISODate(currentDate);
+  const slug    = activeTenant.slug;
 
   try {
-    const res = await fetch('/admin/appuntamenti?data=' + dateStr, {
+    const res = await fetch('/admin/' + slug + '/appuntamenti?data=' + dateStr, {
       headers: { 'X-Admin-Key': key }
     });
     if (res.status === 401) { doLogout(); return; }
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
     const data = await res.json();
-    renderCalendar(data);
-
+    renderCalendar(data, activeTenant.business_type);
   } catch {
     document.getElementById('cal-body').innerHTML =
       '<div class="state-msg"><span class="ico">⚠️</span>Errore di connessione.<br>Riprova tra poco.</div>';
@@ -304,80 +473,111 @@ async function loadDay() {
   }
 }
 
-// ── Rendering ─────────────────────────────────────────────
-function renderCalendar(data) {
+// ── Rendering appuntamenti ─────────────────────────────────────
+function renderCalendar(data, businessType) {
   const n = data.totale;
   document.getElementById('cal-count').innerHTML = n === 0
     ? 'Nessun appuntamento'
     : '<strong>' + n + '</strong> appuntament' + (n === 1 ? 'o' : 'i');
 
-  const mattina    = data.appuntamenti.filter(a => a.ora < '13:00');
-  const pomeriggio = data.appuntamenti.filter(a => a.ora >= '13:00');
+  const apt = data.appuntamenti || [];
 
-  document.getElementById('cal-body').innerHTML =
-    sectionHtml('Mattina (09:00 – 13:00)', mattina) +
-    sectionHtml('Pomeriggio (15:00 – 19:00)', pomeriggio);
+  let html = '';
+  if (businessType === 'ristorante') {
+    // Ristoranti: pranzo (< 16:00) e cena (>= 16:00)
+    const pranzo = apt.filter(a => a.ora < '16:00');
+    const cena   = apt.filter(a => a.ora >= '16:00');
+    html = sectionHtml('🕛 Pranzo', pranzo) + sectionHtml('🌙 Cena', cena);
+  } else {
+    // Barbieri/estetisti/dentisti: mattina e pomeriggio
+    const mattina    = apt.filter(a => a.ora < '13:00');
+    const pomeriggio = apt.filter(a => a.ora >= '13:00');
+    html = sectionHtml('☀️ Mattina', mattina) + sectionHtml('🌤 Pomeriggio', pomeriggio);
+  }
+
+  document.getElementById('cal-body').innerHTML = html || '<div class="state-msg"><span class="ico">📅</span>Nessun appuntamento per questa data.</div>';
 }
 
 function sectionHtml(title, apts) {
   const inner = apts.length
-    ? apts.map(cardHtml).join('')
+    ? apts.map(a => cardHtml(a)).join('')
     : '<div class="empty-section">Nessun appuntamento</div>';
   return '<div class="section-title">' + title + '</div>' + inner;
 }
 
 function cardHtml(a) {
-  const s = cardStyle(a.servizio);
-  return '<div class="apt-card" data-id="' + a.id + '" style="background:' + s.bg + ';border-left-color:' + s.border + '">' +
-    '<div class="card-header">' +
-      '<div class="card-top">' +
-        '<span class="card-time">' + a.ora + '</span>' +
-        '<span class="card-name">' + escHtml(a.nome_cliente) + '</span>' +
+  const s = cardStyle(a);
+  const risorsaInfo = a.risorsa_id
+    ? '<span class="card-meta-item">🪑 Risorsa #' + a.risorsa_id + '</span>'
+    : '';
+  const personeInfo = (a.num_persone && a.num_persone > 1)
+    ? '<span class="card-meta-item">👥 ' + a.num_persone + ' persone</span>'
+    : '';
+
+  return (
+    '<div class="apt-card" data-id="' + a.id + '" style="background:' + s.bg + ';border-left-color:' + s.border + '">' +
+      '<div class="card-header">' +
+        '<div class="card-top">' +
+          '<span class="card-time">' + a.ora + '</span>' +
+          '<span class="card-name">' + escHtml(a.nome_cliente) + '</span>' +
+        '</div>' +
+        '<button class="cancel-btn" data-id="' + a.id + '" data-nome="' + escHtml(a.nome_cliente) + '" data-ora="' + a.ora + '" title="Cancella">×</button>' +
       '</div>' +
-      '<button class="cancel-btn" data-id="' + a.id + '" data-nome="' + escHtml(a.nome_cliente) + '" data-ora="' + a.ora + '" title="Cancella appuntamento">×</button>' +
-    '</div>' +
-    '<div class="card-service">' + escHtml(a.servizio) + ' · ' + a.durata_minuti + ' min</div>' +
-    '<div class="card-phone">📱 ' + escHtml(a.telefono) + '</div>' +
-  '</div>';
+      '<div class="card-service">' + escHtml(a.servizio) + ' · ' + a.durata_minuti + ' min</div>' +
+      '<div class="card-meta">' +
+        '<span class="card-meta-item">📱 ' + escHtml(a.telefono) + '</span>' +
+        risorsaInfo + personeInfo +
+      '</div>' +
+    '</div>'
+  );
 }
 
-function cardStyle(servizio) {
-  const s = servizio.toLowerCase();
+function cardStyle(a) {
+  // Colora per tipo servizio
+  const s = (a.servizio || '').toLowerCase();
+
+  // Stili per ristorante
+  if (s.includes('cena') || s.includes('tavolo') || s.includes('menu'))
+    return { bg: '#FFF7ED', border: '#F97316' };
+  if (s.includes('pranzo'))
+    return { bg: '#FFFBEB', border: '#F59E0B' };
+
+  // Stili per estetista / spa
+  if (s.includes('trattamento') || s.includes('maschera') || s.includes('dermato'))
+    return { bg: '#FDF4FF', border: '#A855F7' };
+  if (s.includes('laminazione') || s.includes('brow') || s.includes('sopracciglia'))
+    return { bg: '#FFF0F9', border: '#EC4899' };
+  if (s.includes('nail') || s.includes('unghie') || s.includes('manicure') || s.includes('pedicure'))
+    return { bg: '#FFF1F2', border: '#FB7185' };
+
+  // Stili per dentista
+  if (s.includes('visita') || s.includes('controllo') || s.includes('igiene'))
+    return { bg: '#F0FDF4', border: '#22C55E' };
+  if (s.includes('pulizia') || s.includes('ablazione'))
+    return { bg: '#ECFDF5', border: '#10B981' };
+
+  // Stili per barbiere
   if (s.includes('experience') || s.includes('pacchetto'))
     return { bg: '#FFF7ED', border: '#F97316' };
-  if (s.includes('trattamento'))
-    return { bg: '#F5F3FF', border: '#8B5CF6' };
   if (s.includes('barba') || s.includes('rasatura'))
     return { bg: '#ECFDF5', border: '#10B981' };
   if (s.includes('taglio') || s.includes('sfumatura'))
     return { bg: '#EBF4FF', border: '#3B82F6' };
+  if (s.includes('colore') || s.includes('tinta') || s.includes('meches'))
+    return { bg: '#F5F3FF', border: '#8B5CF6' };
+
   return { bg: '#F9FAFB', border: '#6B7280' };
 }
 
-// ── Utilità ───────────────────────────────────────────────
-function toISODate(d) {
-  return d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
-}
-
-function formatDate(d) {
-  return GIORNI[d.getDay()] + ' ' + d.getDate() + ' ' + MESI[d.getMonth()] + ' ' + d.getFullYear();
-}
-
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-// ── Cancellazione appuntamento ────────────────────────────
+// ── Cancellazione appuntamento ─────────────────────────────────
 async function cancelAppointment(id, nome, ora) {
   if (!confirm('Cancellare l\'appuntamento di ' + nome + ' alle ' + ora + '?')) return;
+  if (!activeTenant) return;
 
-  const key = localStorage.getItem('adminKey');
+  const key  = localStorage.getItem('adminKey');
+  const slug = activeTenant.slug;
   try {
-    const res = await fetch('/admin/appuntamenti/' + id, {
+    const res = await fetch('/admin/' + slug + '/appuntamenti/' + id, {
       method: 'DELETE',
       headers: { 'X-Admin-Key': key }
     });
@@ -405,14 +605,48 @@ function updateCount(delta) {
     : '<strong>' + n + '</strong> appuntament' + (n === 1 ? 'o' : 'i');
 }
 
-// Event delegation: un solo listener per tutti i bottoni × generati dinamicamente
+// Delegation click per bottoni × generati dinamicamente
 document.getElementById('cal-body').addEventListener('click', function(e) {
   const btn = e.target.closest('.cancel-btn');
   if (!btn) return;
   cancelAppointment(parseInt(btn.dataset.id), btn.dataset.nome, btn.dataset.ora);
 });
 
-// ── Start ─────────────────────────────────────────────────
+// ── Utility ────────────────────────────────────────────────────
+function toISODate(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+function formatDate(d) {
+  return GIORNI[d.getDay()] + ' ' + d.getDate() + ' ' + MESI[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function businessTypeKey(bt) {
+  const map = { barbiere:'bt-barbiere', ristorante:'bt-ristorante',
+                estetista:'bt-estetista', dentista:'bt-dentista' };
+  return map[bt] || 'bt-default';
+}
+
+function businessEmoji(bt) {
+  const map = { barbiere:'✂️', ristorante:'🍽️', estetista:'💆', dentista:'🦷' };
+  return map[bt] || '🏪';
+}
+
+function businessLabel(bt) {
+  const map = { barbiere:'Barbiere', ristorante:'Ristorante',
+                estetista:'Estetista', dentista:'Dentista' };
+  return map[bt] || bt;
+}
+
+// ── Start ──────────────────────────────────────────────────────
 init();
 </script>
 </body>

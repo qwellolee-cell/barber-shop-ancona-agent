@@ -26,6 +26,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Optional
 
+import pydantic
 from fastapi import FastAPI, Request, HTTPException, Header, Depends
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -419,3 +420,253 @@ async def admin_tenant_cancella_appuntamento(tenant_slug: str, appuntamento_id: 
     if not successo:
         raise HTTPException(status_code=404, detail="Appuntamento non trovato per questo tenant")
     return {"successo": True, "id": appuntamento_id, "tenant": tenant_slug}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin API — gestione risorse per tenant
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/admin/{tenant_slug}/risorse", dependencies=[Depends(verificar_admin)])
+async def admin_tenant_risorse(tenant_slug: str):
+    """Lista le risorse configurate per un tenant specifico."""
+    from sqlalchemy import select as sa_select
+    from agent.memory import async_session, Risorsa
+
+    _, tenant_id = await _resolve_tenant(tenant_slug)
+    async with async_session() as session:
+        result = await session.execute(
+            sa_select(Risorsa)
+            .where(Risorsa.tenant_id == tenant_id)
+            .order_by(Risorsa.ordine, Risorsa.id)
+        )
+        risorse = result.scalars().all()
+
+    return {
+        "tenant": tenant_slug,
+        "tenant_id": tenant_id,
+        "totale": len(risorse),
+        "risorse": [
+            {
+                "id": r.id,
+                "nome": r.nome,
+                "tipo": r.tipo,
+                "capienza": r.capienza,
+                "attiva": r.attiva,
+            }
+            for r in risorse
+        ],
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin API — creazione nuovo tenant (onboarding programmatico)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class NuovoTenantRequest(pydantic.BaseModel):
+    slug: str
+    nome: str
+    business_type: str = "barbiere"
+    nome_agente: str = "Assistente"
+    emoji_firma: str = "🤖"
+    tono: str = "professionale e cordiale"
+    whatsapp_numero: Optional[str] = None
+    risorse: list[dict] = []  # [{"nome": "Sedia 1", "tipo": "sedia", "capienza": 1}]
+
+
+@app.post("/admin/tenants", dependencies=[Depends(verificar_admin)])
+async def admin_crea_tenant(body: NuovoTenantRequest):
+    """
+    Crea un nuovo tenant: registra nel DB, genera i file YAML di configurazione.
+    Richiede X-Admin-Key.
+    """
+    import re
+
+    # Valida slug: solo lettere minuscole, cifre e trattini
+    if not re.match(r'^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$', body.slug):
+        raise HTTPException(
+            status_code=400,
+            detail="Slug non valido. Usa solo lettere minuscole, cifre e trattini (es. mio-negozio)."
+        )
+
+    from agent.memory import (
+        crea_o_aggiorna_tenant,
+        seed_risorse_da_settings,
+        get_tenant_by_slug,
+        async_session,
+        Risorsa,
+    )
+    from sqlalchemy import select as sa_select
+
+    # Verifica che lo slug non esista già
+    existing = await get_tenant_by_slug(body.slug)
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Tenant '{body.slug}' già esistente.")
+
+    # Crea la directory del tenant
+    tenant_dir = pathlib.Path(f"tenants/{body.slug}")
+    tenant_dir.mkdir(parents=True, exist_ok=True)
+
+    # Carica template business-type per i default
+    bt_template = _carica_business_type_template(body.business_type)
+
+    # Genera settings.yaml
+    slot_gran = bt_template.get("slot_granularity_min", 15)
+    reminder_finestre = bt_template.get("reminder_finestre_ore", [24])
+    reminder_msg = bt_template.get("reminder_messaggio_template",
+        "Ciao {nome_cliente}! Ricorda il tuo appuntamento alle *{ora}* da {nome_business}. {emoji_firma}")
+    orari_default = bt_template.get("orari_default", [])
+    giorni_chiusi = bt_template.get("giorni_chiusi_default", [])
+
+    # Genera sezione risorse nello YAML
+    if body.risorse:
+        risorse_yaml_lines = []
+        for r in body.risorse:
+            risorse_yaml_lines.append(
+                f'  - nome: "{r.get("nome", "Risorsa 1")}"\n'
+                f'    tipo: {r.get("tipo", "generico")}\n'
+                f'    capienza: {r.get("capienza", 1)}\n'
+                f'    attiva: true'
+            )
+        risorse_section = "risorse:\n" + "\n".join(risorse_yaml_lines)
+    else:
+        # Risorse di default dal template
+        default_risorsa = bt_template.get("risorsa_default", {"nome": "Risorsa 1", "tipo": "generico", "capienza": 1})
+        risorse_section = (
+            f'risorse:\n'
+            f'  - nome: "{default_risorsa.get("nome", "Risorsa 1")}"\n'
+            f'    tipo: {default_risorsa.get("tipo", "generico")}\n'
+            f'    capienza: {default_risorsa.get("capienza", 1)}\n'
+            f'    attiva: true'
+        )
+
+    # Genera orari YAML (usa quelli del template oppure orari tipici)
+    if orari_default:
+        orari_yaml = _genera_orari_yaml_da_template(orari_default, giorni_chiusi)
+    else:
+        orari_yaml = _genera_orari_yaml_default()
+
+    settings_content = f"""# tenants/{body.slug}/settings.yaml
+# Configurazione tenant — generata da Cleek Onboarding
+# Business type: {body.business_type}
+
+tenant:
+  slug: {body.slug}
+  nome: "{body.nome}"
+  business_type: {body.business_type}
+  lingua: it
+
+agente:
+  nome: "{body.nome_agente}"
+  tono: "{body.tono}"
+  emoji_firma: "{body.emoji_firma}"
+
+{orari_yaml}
+
+scheduling:
+  slot_granularity_min: {slot_gran}
+
+reminder:
+  finestre_ore: {reminder_finestre}
+  messaggio_template: |
+    {reminder_msg}
+
+{risorse_section}
+"""
+    (tenant_dir / "settings.yaml").write_text(settings_content, encoding="utf-8")
+
+    # Genera prompts.yaml minimale
+    prompts_content = f"""# tenants/{body.slug}/prompts.yaml
+# System prompt — personalizza questo file per adattare il comportamento dell'agente
+
+system_prompt: |
+  Sei {body.nome_agente}, l'assistente virtuale di {body.nome}.
+  Il tuo tono è {body.tono}.
+  Aiuta i clienti a prenotare appuntamenti, rispondere a domande e gestire le loro prenotazioni.
+  Rispondi sempre in italiano.
+  Firma i messaggi con {body.emoji_firma}
+
+fallback_message: "Scusa, non ho capito bene. Puoi riscrivere? Sono qui per aiutarti {body.emoji_firma}"
+error_message: "Mi dispiace, sto avendo un problema tecnico. Riprova tra qualche minuto!"
+"""
+    (tenant_dir / "prompts.yaml").write_text(prompts_content, encoding="utf-8")
+
+    # Crea il tenant nel DB
+    db_tenant = await crea_o_aggiorna_tenant(
+        slug=body.slug,
+        nome=body.nome,
+        business_type=body.business_type,
+        whatsapp_numero=body.whatsapp_numero,
+    )
+
+    # Seed risorse nel DB
+    await seed_risorse_da_settings(body.slug, tenant_id=db_tenant.id)
+
+    # Invalida cache tenant_loader
+    try:
+        from agent.tenant_loader import carica_tenant
+        carica_tenant.cache_clear()
+    except Exception:
+        pass
+
+    logger.info(f"Nuovo tenant creato: {body.slug} (id={db_tenant.id})")
+    return {
+        "successo": True,
+        "tenant": {
+            "id": db_tenant.id,
+            "slug": db_tenant.slug,
+            "nome": db_tenant.nome,
+            "business_type": db_tenant.business_type,
+        },
+        "files": [
+            f"tenants/{body.slug}/settings.yaml",
+            f"tenants/{body.slug}/prompts.yaml",
+        ],
+        "messaggio": f"Tenant '{body.slug}' creato con successo. Personalizza i file YAML generati.",
+    }
+
+
+def _carica_business_type_template(business_type: str) -> dict:
+    """Carica il template business-type da business-types/{tipo}.yaml."""
+    try:
+        import yaml
+        with open(f"business-types/{business_type}.yaml", "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
+
+
+def _genera_orari_yaml_da_template(orari_default: list, giorni_chiusi: list) -> str:
+    """Genera la sezione orari YAML dai dati del template business-type."""
+    GIORNI_NOMI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+    linee = ["orari:"]
+    for idx, nome in enumerate(GIORNI_NOMI):
+        chiuso = nome in [g.lower() for g in giorni_chiusi]
+        linee.append(f"  - giorno: {idx}      # {nome}")
+        if chiuso:
+            linee.append("    aperto: false")
+        else:
+            linee.append("    aperto: true")
+            linee.append("    turni:")
+            for turno in orari_default:
+                ap = turno.get("apertura", "09:00")
+                ch = turno.get("chiusura", "18:00")
+                linee.append(f'      - apertura: "{ap}"')
+                linee.append(f'        chiusura: "{ch}"')
+    return "\n".join(linee)
+
+
+def _genera_orari_yaml_default() -> str:
+    """Genera orari di default (lun-ven 9-18) quando il template non li specifica."""
+    GIORNI_NOMI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+    linee = ["orari:"]
+    for idx, nome in enumerate(GIORNI_NOMI):
+        chiuso = idx in (5, 6)  # sabato e domenica
+        linee.append(f"  - giorno: {idx}      # {nome}")
+        if chiuso:
+            linee.append("    aperto: false")
+        else:
+            linee.append("    aperto: true")
+            linee.append("    turni:")
+            linee.append('      - apertura: "09:00"')
+            linee.append('        chiusura: "18:00"')
+    return "\n".join(linee)
