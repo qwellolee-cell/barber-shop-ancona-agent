@@ -1,0 +1,73 @@
+# tenants/estetista-torino/settings.yaml
+# Configurazione tenant — generata da Cleek Onboarding
+# Business type: estetista
+
+tenant:
+  slug: estetista-torino
+  nome: "Beauty Torino"
+  business_type: estetista
+  lingua: it
+
+agente:
+  nome: "Giulia"
+  tono: "empatico"
+  emoji_firma: "💆"
+
+orari:
+  - giorno: 0      # lunedì
+    aperto: false
+  - giorno: 1      # martedì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "19:00"
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "19:00"
+  - giorno: 3      # giovedì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "19:00"
+  - giorno: 4      # venerdì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "19:00"
+  - giorno: 5      # sabato
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "17:00"
+  - giorno: 6      # domenica
+    aperto: false
+
+scheduling:
+  slot_granularity_min: 15
+
+reminder:
+  finestre_ore: [24]
+  messaggio_template: |
+    Ciao {nome_cliente}! 💆
+    Ti ricordiamo il tuo appuntamento di domani alle *{ora}*
+    per *{servizio}* presso {nome_business}.
+    Scrivi *ANNULLA* se non puoi venire.
+    A presto! ✨
+
+risorse:
+  - nome: "Risorsa 1"
+    tipo: generico
+    capienza: 1
+    attiva: true

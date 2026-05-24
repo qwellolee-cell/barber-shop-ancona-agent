@@ -1,0 +1,81 @@
+# tenants/pizza-napoli/settings.yaml
+# Configurazione tenant — generata da Cleek Onboarding
+# Business type: ristorante
+
+tenant:
+  slug: pizza-napoli
+  nome: "Pizzeria Napoli"
+  business_type: ristorante
+  lingua: it
+
+agente:
+  nome: "Sofia"
+  tono: "accogliente e caldo"
+  emoji_firma: "🍕"
+
+orari:
+  - giorno: 0      # lunedì
+    aperto: false
+  - giorno: 1      # martedì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 3      # giovedì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 4      # venerdì
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 5      # sabato
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+  - giorno: 6      # domenica
+    aperto: true
+    turni:
+      - apertura: "12:00"
+        chiusura: "15:00"
+      - apertura: "19:00"
+        chiusura: "23:00"
+
+scheduling:
+  slot_granularity_min: 30
+
+reminder:
+  finestre_ore: [2]
+  messaggio_template: |
+    Ciao {nome_cliente}! 🍽️
+    Ricorda che tra circa 2 ore hai un tavolo prenotato
+    alle *{ora}* per *{num_persone} persone* da {nome_business}.
+    Per cancellare scrivi ANNULLA o chiama il locale.
+
+risorse:
+  - nome: "Tavolo A"
+    tipo: tavolo
+    capienza: 4
+    attiva: true
+  - nome: "Tavolo B"
+    tipo: tavolo
+    capienza: 6
+    attiva: true

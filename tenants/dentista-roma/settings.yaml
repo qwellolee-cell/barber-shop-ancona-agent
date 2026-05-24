@@ -1,0 +1,72 @@
+# tenants/dentista-roma/settings.yaml
+# Configurazione tenant — generata da Cleek Onboarding
+# Business type: dentista
+
+tenant:
+  slug: dentista-roma
+  nome: "Studio Dr. Rossi"
+  business_type: dentista
+  lingua: it
+
+agente:
+  nome: "Marco"
+  tono: "professionale"
+  emoji_firma: "🦷"
+
+orari:
+  - giorno: 0      # lunedì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "18:30"
+  - giorno: 1      # martedì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "18:30"
+  - giorno: 2      # mercoledì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "18:30"
+  - giorno: 3      # giovedì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "18:30"
+  - giorno: 4      # venerdì
+    aperto: true
+    turni:
+      - apertura: "09:00"
+        chiusura: "13:00"
+      - apertura: "14:30"
+        chiusura: "18:30"
+  - giorno: 5      # sabato
+    aperto: false
+  - giorno: 6      # domenica
+    aperto: false
+
+scheduling:
+  slot_granularity_min: 15
+
+reminder:
+  finestre_ore: [48, 2]
+  messaggio_template: |
+    Gentile {nome_cliente},
+    Le ricordiamo l'appuntamento del {data} alle *{ora}*
+    per *{servizio}* presso {nome_business}.
+    Per spostare o cancellare risponda a questo messaggio.
+
+risorse:
+  - nome: "Risorsa 1"
+    tipo: generico
+    capienza: 1
+    attiva: true
