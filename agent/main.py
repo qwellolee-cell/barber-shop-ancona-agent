@@ -137,6 +137,14 @@ async def lifespan(app: FastAPI):
     logger.info(f"Server Cleek in ascolto sulla porta {PORT}")
     logger.info(f"Provider WhatsApp: {proveedor.__class__.__name__}")
 
+    # Verifica e configura automaticamente i webhook GreenAPI
+    # (controlla che 'incomingWebhook' sia attivo, lo abilita se necessario)
+    if hasattr(proveedor, "verificar_y_configurar_webhook"):
+        try:
+            await proveedor.verificar_y_configurar_webhook()
+        except Exception as e:
+            logger.warning(f"Verifica webhook GreenAPI fallita: {e}")
+
     scheduler = crea_scheduler()
     scheduler.start()
     logger.info("Scheduler promemoria avviato (ogni ora)")

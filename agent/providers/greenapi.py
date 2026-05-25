@@ -96,13 +96,32 @@ class ProveedorGreenAPI(ProveedorWhatsApp):
             texto = _TESTO_MEDIA_NON_SUPPORTATO
             logger.info(f"GreenAPI: tipo media non testuale ({tipo_msg}) da {telefono} — invio cortesia")
 
-        # ── Tipo sconosciuto — ignora con log ───────────────────────
+        # ── Tipo sconosciuto — prova estrazione testo generica ─────
         else:
-            logger.warning(
-                f"GreenAPI: typeMessage non gestito ({tipo_msg!r}) da {telefono}. "
-                f"Webhook: {str(body)[:200]}"
-            )
-            return []
+            # Cerca testo nei campi più comuni per non perdere messaggi
+            # di nuovi contatti che usano formati inaspettati
+            texto_generico = (
+                message_data.get("textMessageData", {}).get("textMessage", "")
+                or message_data.get("extendedTextMessageData", {}).get("text", "")
+                or message_data.get("buttonsResponseMessage", {}).get("selectedButtonId", "")
+                or message_data.get("listResponseMessage", {}).get("singleSelectReply", {}).get("selectedRowId", "")
+                or ""
+            ).strip()
+
+            if texto_generico:
+                logger.info(
+                    f"GreenAPI: tipo non standard ({tipo_msg!r}) da {telefono} "
+                    f"— testo estratto: {texto_generico[:60]!r}"
+                )
+                texto = texto_generico
+            else:
+                # Nessun testo estraibile → invia risposta di cortesia
+                # così almeno il numero nuovo riceve qualcosa
+                texto = _TESTO_MEDIA_NON_SUPPORTATO
+                logger.warning(
+                    f"GreenAPI: typeMessage sconosciuto ({tipo_msg!r}) da {telefono} "
+                    f"— invio risposta di cortesia. Payload: {str(body)[:300]}"
+                )
 
         if not texto:
             logger.debug(f"GreenAPI: messaggio vuoto da {telefono}, ignorato")
@@ -151,3 +170,47 @@ class ProveedorGreenAPI(ProveedorWhatsApp):
         except Exception as e:
             logger.error(f"GreenAPI: eccezione nell'invio a {telefono}: {e}")
             return False
+
+    async def verificar_y_configurar_webhook(self) -> None:
+        """
+        Verifica che l'istanza GreenAPI abbia i webhook in entrata attivi.
+        Se 'incomingWebhook' è disattivato, lo attiva automaticamente.
+        Chiamare all'avvio del server (nel lifespan).
+        """
+        if not self.instance_id or not self.token:
+            logger.warning("GreenAPI: credenziali mancanti — impossibile verificare le impostazioni")
+            return
+
+        url_get = f"{self.base_url}/getSettings/{self.token}"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url_get)
+            if r.status_code != 200:
+                logger.warning(f"GreenAPI: getSettings fallito ({r.status_code}) — verifica manuale necessaria")
+                return
+
+            settings = r.json()
+            incoming = settings.get("incomingWebhook", "no")
+
+            if incoming != "yes":
+                logger.warning(
+                    "GreenAPI: 'incomingWebhook' è disattivato! "
+                    "I messaggi in arrivo NON generano webhook — il bot non può rispondere. "
+                    "Attivazione automatica in corso..."
+                )
+                url_set = f"{self.base_url}/setSettings/{self.token}"
+                async with httpx.AsyncClient(timeout=10) as client:
+                    r2 = await client.post(url_set, json={"incomingWebhook": "yes"})
+                if r2.status_code == 200:
+                    logger.info("GreenAPI: 'incomingWebhook' attivato con successo ✓")
+                else:
+                    logger.error(
+                        f"GreenAPI: impossibile attivare 'incomingWebhook' automaticamente "
+                        f"({r2.status_code}). Vai su app.green-api.com → Istanza → Impostazioni "
+                        f"e abilita 'Webhook messaggi in arrivo'."
+                    )
+            else:
+                logger.info("GreenAPI: 'incomingWebhook' attivo ✓ — il bot riceverà tutti i messaggi")
+
+        except Exception as e:
+            logger.warning(f"GreenAPI: impossibile verificare le impostazioni: {e}")
