@@ -238,9 +238,9 @@ _MAX_EVENTI = 20
 
 def _registra_evento(tipo: str, dati: dict):
     """Aggiunge un evento al buffer di diagnostica."""
-    from datetime import datetime
+    from datetime import datetime, UTC
     _eventi_recenti.append({
-        "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
         "tipo": tipo,
         **dati,
     })

@@ -20,7 +20,7 @@ Compatibilità backward:
 import os
 import logging
 import yaml
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, UTC
 from typing import Optional
 
 from sqlalchemy import String, Text, DateTime, select, Integer, Boolean, and_, text
@@ -188,7 +188,7 @@ async def _seed_tenant_default():
                 business_type="barbiere",
                 config_path="tenants/barber-shop-ancona/settings.yaml",
                 attivo=True,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
             ))
             await session.commit()
             logger.info("Seed: tenant barber-shop-ancona (id=1) creato")
@@ -235,7 +235,7 @@ async def crea_o_aggiorna_tenant(
                 whatsapp_numero=whatsapp_numero,
                 config_path=config_path or f"tenants/{slug}/settings.yaml",
                 attivo=True,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
             )
             session.add(tenant)
         else:
@@ -453,7 +453,7 @@ async def prenota_appuntamento(
             buffer_minuti=buffer_minuti,
             stato="confermato",
             reminder_inviato=False,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         session.add(nuovo)
         await session.commit()
@@ -489,7 +489,7 @@ async def get_appuntamento_cliente(
     tenant_id: int = 1,
 ) -> Optional[Appuntamento]:
     """Il prossimo appuntamento futuro confermato del cliente, scoped per tenant."""
-    ora = datetime.utcnow()
+    ora = datetime.now(UTC)
     async with async_session() as session:
         result = await session.execute(
             select(Appuntamento)
@@ -643,7 +643,7 @@ async def get_appuntamenti_promemoria(
         except Exception:
             finestra_ore = 24
 
-    ora = datetime.utcnow()
+    ora = datetime.now(UTC)
     limite = ora + timedelta(hours=finestra_ore)
 
     async with async_session() as session:
@@ -689,7 +689,7 @@ async def guardar_mensaje(
             telefono=telefono,
             role=role,
             content=content,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         ))
         await session.commit()
 

@@ -4,7 +4,7 @@ Test asincroni per agent/memory.py.
 Ogni test parte da un DB vuoto (reset_db in conftest.py è autouse).
 Il tenant_id di default usato nei test è 1.
 """
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, UTC
 from unittest.mock import MagicMock
 
 from agent.memory import (
@@ -192,7 +192,7 @@ async def test_get_appuntamenti_giorno_vuoto():
 
 
 async def test_get_appuntamento_cliente_futuro():
-    futuro = datetime.utcnow() + timedelta(hours=2)
+    futuro = datetime.now(UTC) + timedelta(hours=2)
     apt = await prenota_appuntamento(
         telefono=TELEFONO, nome="Mario", servizio="Taglio",
         data_ora=futuro, durata_minuti=30, tenant_id=TENANT_ID,
