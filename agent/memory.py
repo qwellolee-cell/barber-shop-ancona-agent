@@ -421,7 +421,9 @@ async def prenota_appuntamento(
                 logger.info(f"[tenant={tenant_id}] Nessuna risorsa libera in {data_ora}")
                 return None
             risorsa_id = risorsa_scelta.id
-            logger.info(f"[tenant={tenant_id}] Risorsa assegnata: {risorsa_scelta.nome} (cap={risorsa_scelta.capienza})")
+            logger.info(
+                f"[tenant={tenant_id}] Risorsa assegnata: {risorsa_scelta.nome} (cap={risorsa_scelta.capienza})"
+            )
 
         else:
             # Fallback globale (tenant senza risorse configurate)

@@ -21,7 +21,6 @@ import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
 from datetime import time
-from typing import Optional
 
 import yaml
 

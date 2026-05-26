@@ -20,8 +20,7 @@ Migrazione in corso:
 """
 
 import logging
-from datetime import time
-from agent.tenant_loader import carica_tenant_default, TurnoApertura
+from agent.tenant_loader import carica_tenant_default
 
 logger = logging.getLogger("agentkit")
 
@@ -30,6 +29,7 @@ logger = logging.getLogger("agentkit")
 # Mantenute per compatibilità backward con memory.py (Fase 1)
 # Verranno rimosse in Fase 2 quando memory.py sarà multi-tenant
 # ---------------------------------------------------------------------------
+
 
 def _build_legacy_constants():
     """

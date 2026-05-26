@@ -40,7 +40,6 @@ from agent.memory import (
     get_appuntamenti_giorno,
     cancella_appuntamento,
     get_tenant_by_slug,
-    get_tenant_by_whatsapp,
 )
 from agent.tenant_loader import carica_tenant, carica_tenant_default, TenantConfig
 from agent.providers import obtener_proveedor
@@ -204,7 +203,6 @@ async def health_check():
 @app.get("/tenants", dependencies=[Depends(verificar_admin)])
 async def lista_tenants():
     """Lista tutti i tenant attivi. Richiede X-Admin-Key."""
-    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy import select
     from agent.memory import Tenant, async_session
 
@@ -367,7 +365,10 @@ async def _processa_webhook(request: Request, tenant_slug: Optional[str]) -> dic
 
         if not mensajes:
             # Il provider ha scartato il webhook (tipo non gestito, messaggio vuoto, ecc.)
-            _registra_evento("webhook_ignorato", {"tenant": tenant_config.slug, "motivo": "parsear_webhook ha restituito lista vuota"})
+            _registra_evento("webhook_ignorato", {
+                "tenant": tenant_config.slug,
+                "motivo": "parsear_webhook ha restituito lista vuota",
+            })
             return {"status": "ok", "tenant": tenant_config.slug, "processed": 0}
 
         processati = 0
@@ -593,10 +594,7 @@ async def admin_crea_tenant(body: NuovoTenantRequest):
         crea_o_aggiorna_tenant,
         seed_risorse_da_settings,
         get_tenant_by_slug,
-        async_session,
-        Risorsa,
     )
-    from sqlalchemy import select as sa_select
 
     # Verifica che lo slug non esista già
     existing = await get_tenant_by_slug(body.slug)

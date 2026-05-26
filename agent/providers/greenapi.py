@@ -20,7 +20,10 @@ _TIPI_NON_TESTO = (
 )
 
 # Messaggio interno che il bot riceve quando il tipo non è testo
-_TESTO_MEDIA_NON_SUPPORTATO = "[Il cliente ha inviato un messaggio non testuale (audio/immagine/video/sticker). Rispondi gentilmente chiedendo di scrivere la richiesta in testo.]"
+_TESTO_MEDIA_NON_SUPPORTATO = (
+    "[Il cliente ha inviato un messaggio non testuale (audio/immagine/video/sticker). "
+    "Rispondi gentilmente chiedendo di scrivere la richiesta in testo.]"
+)
 
 
 class ProveedorGreenAPI(ProveedorWhatsApp):
